@@ -183,6 +183,8 @@ export interface RunInput {
 
 export interface RunResult {
   deliverable: DeliverablePackage;
+  /** The post-discovery assumption register (confirmed/corrected). */
+  assumptions: Assumption[];
   reconciled: V2;
   handoff: HandoffPackage;
 }
@@ -327,5 +329,5 @@ export async function run(
     throw new Error("Pipeline produced no handoff package — no buildable design notes were present.");
   }
 
-  return { deliverable, reconciled, handoff: lastHandoff };
+  return { deliverable, assumptions, reconciled, handoff: lastHandoff };
 }

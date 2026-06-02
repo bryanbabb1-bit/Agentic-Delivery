@@ -17,6 +17,6 @@
     "verbatimModuleSyntax": true,
     "noEmit": true
   },
-  "include": ["driver", "intake", "gates", "examples"],
+  "include": ["driver", "intake", "gates", "examples", "web"],
   "exclude": ["node_modules", "prototypes"]
 }

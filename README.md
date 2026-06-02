@@ -36,6 +36,23 @@ SOW in, package out — compiler, not copilot.
 | `gates/` | The hook scripts (`deploy-test-gate.js`, `fidelity-gate.js`) + shared `gate-lib.js`. |
 | `prototypes/` | Generated HTML/SLDS mockup sets (git-ignored). |
 
+## Web intake (the end-user front door)
+
+A browser UI over the pipeline — drop a SOW, get the package summary, the
+assumption register, and the clickable prototype embedded, with no agent to
+operate.
+
+```bash
+npm run web     # then open http://localhost:4317
+```
+
+In the page: paste a SOW (or **Load example SOW**) → **Generate package**. Today
+this runs in **demo mode** — every submission returns the recorded Zennify
+Client-360 outputs regardless of input. It becomes live generation by swapping
+the `FixtureRunner` for the `SdkRunner` in `web/intake-service.ts` (one function),
+once that seam is wired. The server (`web/server.ts`) is dependency-free Node;
+per-submission output lands under `web/.runs/` (git-ignored).
+
 ## Status: Phase 1 runnable
 
 The structure, contracts, agents, skills, gates, and the deterministic driver are

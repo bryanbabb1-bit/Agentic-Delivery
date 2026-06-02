@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SOW → Ship — Intake</title>
+  <style>
+    :root { --brand:#0176d3; --border:#c9c9c9; --bg:#f3f3f3; --weak:#5c5c5c; --warn:#fe9339; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#181818; background:var(--bg); }
+    header { background:#032d60; color:#fff; padding:.9rem 1.25rem; display:flex; align-items:center; gap:.75rem; }
+    header h1 { font-size:1.05rem; margin:0; font-weight:700; }
+    .badge { background:var(--warn); color:#2b2826; border-radius:.25rem; padding:.1rem .5rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; font-weight:700; }
+    .wrap { display:flex; gap:1rem; padding:1rem; align-items:flex-start; flex-wrap:wrap; }
+    .col { flex:1 1 380px; min-width:320px; }
+    .card { background:#fff; border:1px solid var(--border); border-radius:.25rem; margin-bottom:1rem; }
+    .card h2 { font-size:.9rem; margin:0; padding:.7rem 1rem; border-bottom:1px solid #e5e5e5; }
+    .card .body { padding:1rem; }
+    label { display:block; font-size:.78rem; color:var(--weak); margin:.5rem 0 .25rem; text-transform:uppercase; letter-spacing:.03em; }
+    input[type=text], textarea { width:100%; padding:.55rem; border:1px solid var(--border); border-radius:.25rem; font:inherit; }
+    textarea { min-height:220px; resize:vertical; }
+    button { border:1px solid var(--brand); background:var(--brand); color:#fff; border-radius:.25rem; padding:.55rem .9rem; font:inherit; cursor:pointer; }
+    button.secondary { background:#fff; color:var(--brand); }
+    button:disabled { opacity:.55; cursor:default; }
+    .row { display:flex; gap:.5rem; margin-top:.75rem; flex-wrap:wrap; }
+    .note { font-size:.78rem; color:var(--weak); }
+    .metrics { display:flex; gap:.6rem; flex-wrap:wrap; }
+    .metric { border:1px solid var(--border); border-radius:.25rem; padding:.5rem .8rem; flex:1 1 auto; min-width:90px; }
+    .metric .k { font-size:.66rem; text-transform:uppercase; color:var(--weak); letter-spacing:.03em; }
+    .metric .v { font-size:1.2rem; font-weight:700; }
+    .asm { border:1px solid var(--border); border-radius:.25rem; padding:.6rem; margin-bottom:.5rem; }
+    .asm .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:.25rem; }
+    .asm .topic { font-size:.7rem; text-transform:uppercase; letter-spacing:.03em; color:var(--weak); font-weight:700; }
+    .pill { font-size:.66rem; text-transform:uppercase; border-radius:.25rem; padding:.08rem .45rem; background:#ecebea; }
+    .pill.warn { background:var(--warn); color:#2b2826; }
+    .pill.ok { background:#2e844a; color:#fff; }
+    iframe { width:100%; height:640px; border:1px solid var(--border); border-radius:.25rem; background:#fff; }
+    .tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.5rem; }
+    .tabs button { background:#fff; color:var(--brand); padding:.35rem .7rem; font-size:.8rem; }
+    .tabs button.active { background:var(--brand); color:#fff; }
+    .hidden { display:none; }
+    .err { color:#ba0517; font-size:.85rem; }
+    a { color:var(--brand); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SOW → Ship · Intake</h1>
+    <span class="badge" id="mode">demo mode</span>
+  </header>
+
+  <div class="wrap">
+    <div class="col">
+      <div class="card">
+        <h2>Submit a SOW</h2>
+        <div class="body">
+          <p class="note">Drop in a signed SOW and receive a deliverable package — epics, stories, the assumption register, and a clickable prototype. You never touch an agent.</p>
+          <p class="note"><strong>Demo mode:</strong> outputs are the recorded Zennify Client-360 example regardless of input. Live generation activates once <code>SdkRunner</code> is wired.</p>
+          <label for="sowRef">SOW reference</label>
+          <input type="text" id="sowRef" placeholder="e.g. ZEN-SBH-CLIENT360" />
+          <label for="sowText">SOW text</label>
+          <textarea id="sowText" placeholder="Paste the SOW scope here…"></textarea>
+          <div class="row">
+            <button id="generate">Generate package</button>
+            <button class="secondary" id="loadExample" type="button">Load example SOW</button>
+          </div>
+          <p class="err hidden" id="error"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col" id="results" style="flex: 1 1 560px;">
+      <div class="card">
+        <h2>Deliverable package</h2>
+        <div class="body" id="summary"><p class="note">No package yet — submit a SOW to generate one.</p></div>
+      </div>
+      <div class="card hidden" id="asmCard">
+        <h2>Assumption register</h2>
+        <div class="body" id="assumptions"></div>
+      </div>
+      <div class="card hidden" id="protoCard">
+        <h2>Prototype (clickable v1)</h2>
+        <div class="body">
+          <div class="tabs" id="protoTabs"></div>
+          <iframe id="protoFrame" title="prototype"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
+
+    $("loadExample").addEventListener("click", async () => {
+      const r = await fetch("/api/example");
+      const j = await r.json();
+      $("sowText").value = j.sowText;
+      $("sowRef").value = j.sowRef;
+    });
+
+    $("generate").addEventListener("click", async () => {
+      const sowText = $("sowText").value;
+      const sowRef = $("sowRef").value;
+      $("error").classList.add("hidden");
+      if (!sowText.trim()) { showError("Paste some SOW text first."); return; }
+      $("generate").disabled = true;
+      $("generate").textContent = "Generating…";
+      try {
+        const r = await fetch("/api/intake", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sowText, sowRef }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Generation failed");
+        render(data);
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        $("generate").disabled = false;
+        $("generate").textContent = "Generate package";
+      }
+    });
+
+    function showError(msg) { const el = $("error"); el.textContent = msg; el.classList.remove("hidden"); }
+
+    function render(data) {
+      const pkg = data.result.deliverable;
+      const metric = (k, v) => `<div class="metric"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
+      $("summary").innerHTML = `
+        <div class="metrics">
+          ${metric("Status", pkg.status)}
+          ${metric("Epics", pkg.epics.length)}
+          ${metric("Stories", pkg.storyPackages.length)}
+          ${metric("Mockups", pkg.mockups.length)}
+          ${metric("Boundaries", data.result.handoff.knownBoundaries.length)}
+        </div>
+        <p class="note" style="margin-top:.75rem;">SOW <strong>${esc(data.sowRef)}</strong> · reconcile diff: ${data.result.reconciled.changes.length} change(s), ${data.result.reconciled.scopeDeltas.length} scope delta(s) · handoff: UAT-ready.</p>`;
+
+      const asms = data.result.assumptions || [];
+      $("asmCard").classList.toggle("hidden", asms.length === 0);
+      $("assumptions").innerHTML = asms.map((a) => `
+        <div class="asm">
+          <div class="top">
+            <span class="topic">${esc(a.topic)}</span>
+            <span class="pill ${a.blocking ? "warn" : "ok"}">${a.blocking ? "blocking" : "settled"}</span>
+          </div>
+          <div>${esc(a.statement)}</div>
+        </div>`).join("");
+
+      const protos = data.prototypes || [];
+      $("protoCard").classList.toggle("hidden", protos.length === 0);
+      const tabs = $("protoTabs");
+      tabs.innerHTML = "";
+      protos.forEach((p, i) => {
+        const b = document.createElement("button");
+        b.textContent = p.title;
+        b.className = i === 0 ? "active" : "";
+        b.onclick = () => {
+          [...tabs.children].forEach((c) => c.classList.remove("active"));
+          b.classList.add("active");
+          $("protoFrame").src = `/runs/${data.runId}/${p.file}`;
+        };
+        tabs.appendChild(b);
+      });
+      if (protos.length) $("protoFrame").src = `/runs/${data.runId}/${protos[0].file}`;
+    }
+  </script>
+</body>
+</html>

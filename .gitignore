@@ -10,6 +10,9 @@ dist/
 prototypes/*
 !prototypes/.gitkeep
 
+# Per-submission run output from the web intake server
+web/.runs/
+
 # Local env / secrets
 .env
 .env.local

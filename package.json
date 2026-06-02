@@ -12,6 +12,7 @@
     "test": "vitest run",
     "intake": "tsx intake/submit.ts",
     "example": "tsx examples/zennify-client360/run.ts",
+    "web": "tsx web/server.ts",
     "qa:screenshot": "node scripts/screenshot.mjs"
   },
   "dependencies": {
