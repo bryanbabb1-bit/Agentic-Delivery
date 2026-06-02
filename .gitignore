@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build / cache
+dist/
+*.tsbuildinfo
+.vitest/
+
+# Generated prototype output (keep the directory, ignore the artifacts)
+prototypes/*
+!prototypes/.gitkeep
+
+# Local env / secrets
+.env
+.env.local
+
+# OS noise
+.DS_Store

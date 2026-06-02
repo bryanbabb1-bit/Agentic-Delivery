@@ -1,0 +1,21 @@
+{
+  "//": "MCP servers for the grounded build + handoff stages. Both are moving targets — verify the package names, commands, and tool signatures against current docs before wiring builder/qa/handoff to them (ARCHITECTURE.md §2).",
+  "mcpServers": {
+    "salesforce-dx": {
+      "//": "Salesforce DX MCP Server (Beta). Used by designer (read-only: metadata + SOQL), builder (scratch org / deploy / run tests), and qa (run tests + SOQL). NEVER point this at a production org — see BuildResult.isProduction in driver/contracts.ts.",
+      "command": "npx",
+      "args": ["-y", "@salesforce/mcp", "--orgs", "DEFAULT_TARGET_ORG", "--toolsets", "all"],
+      "env": {}
+    },
+    "jira": {
+      "//": "Jira MCP. Used by the handoff agent to export the contracted story documentation. Replace with your team's Jira MCP server + credentials.",
+      "command": "npx",
+      "args": ["-y", "@atlassian/mcp-server-jira"],
+      "env": {
+        "JIRA_BASE_URL": "${JIRA_BASE_URL}",
+        "JIRA_API_TOKEN": "${JIRA_API_TOKEN}",
+        "JIRA_USER_EMAIL": "${JIRA_USER_EMAIL}"
+      }
+    }
+  }
+}

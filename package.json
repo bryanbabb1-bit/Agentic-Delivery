@@ -1,0 +1,25 @@
+{
+  "name": "sow-to-ship",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SOW → Ship: a deterministic agent pipeline that drives a signed Salesforce SOW to a client-ready deliverable package.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "intake": "tsx intake/submit.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.1",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.0",
+    "tsx": "4.16.0",
+    "typescript": "5.5.4",
+    "vitest": "2.0.5"
+  }
+}
