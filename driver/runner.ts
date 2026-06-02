@@ -11,6 +11,7 @@
 import type { AssumptionAgenda } from "./discovery.js";
 import type { AssumptionVerdict } from "./v1-reconcile.js";
 import type { GateResult } from "./contracts.js";
+import { loadAgent, buildUserPrompt, extractJson } from "./agent-loader.js";
 
 /* ---------------------------------------------------------------- interfaces */
 
@@ -37,19 +38,64 @@ export interface PipelineDeps {
 
 /* --------------------------------------------------- production seams (default) */
 
+export interface SdkRunnerOptions {
+  /** Where the subagent .md files live (defaults to .claude/agents). */
+  agentsDir?: string;
+  /** Working directory for the Agent SDK process. */
+  cwd?: string;
+}
+
 /**
- * The real model seam. Stubbed for the scaffold.
+ * The live model seam: runs each subagent via the Agent SDK
+ * (`@anthropic-ai/claude-agent-sdk`). Loads the agent's `.md`, runs it single-
+ * shot with built-in tools disabled and filesystem settings isolated, reads the
+ * `result` message, and extracts the JSON the agent emitted.
  *
- * TODO(sdk): wire @anthropic-ai/claude-agent-sdk — load the subagent named
- * `agent` from .claude/agents/<agent>.md, run it with `input` serialized as the
- * prompt, parse the JSON it emits, and return it. Verify the SDK signature
- * against current docs first (SDK ~0.2.x is moving; note the zod peer).
+ * SCOPE: this wires the text-in/JSON-out (plan) stages. Tool-using stages
+ * (builder/qa via DX MCP, handoff via Jira, prototype file-writing) need their
+ * tools + MCP granted — that's the Phase-2 follow-up (see DECISIONS.md).
+ *
+ * NOTE: unverified in CI/sandbox — the SDK spawns the Claude Code process and
+ * needs Anthropic credentials. Validate signatures + message handling on a
+ * credentialed machine before relying on it.
  */
 export class SdkRunner implements SubagentRunner {
-  async run(agent: string, _input: unknown): Promise<unknown> {
-    throw new Error(
-      `SdkRunner.run('${agent}') is not wired yet — connect the Agent SDK in driver/runner.ts.`,
-    );
+  constructor(private readonly opts: SdkRunnerOptions = {}) {}
+
+  async run(agent: string, input: unknown): Promise<unknown> {
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+      throw new Error(
+        `SdkRunner needs Anthropic credentials (set ANTHROPIC_API_KEY) to run agent '${agent}' live.`,
+      );
+    }
+
+    const def = await loadAgent(agent, this.opts.agentsDir);
+    const { query } = await import("@anthropic-ai/claude-agent-sdk");
+
+    const q = query({
+      prompt: buildUserPrompt(input),
+      options: {
+        ...(def.model ? { model: def.model } : {}),
+        systemPrompt: def.systemPrompt,
+        tools: [], // plan stages need no built-in tools; Phase 2 grants per-agent
+        settingSources: [], // isolation: don't load project settings/hooks here
+        maxTurns: 1,
+        ...(this.opts.cwd ? { cwd: this.opts.cwd } : {}),
+      },
+    });
+
+    let resultText: string | undefined;
+    for await (const message of q) {
+      if (message.type === "result") {
+        if (message.subtype === "success") resultText = message.result;
+        else throw new Error(`agent '${agent}' run failed (${message.subtype}).`);
+      }
+    }
+
+    if (resultText === undefined) {
+      throw new Error(`agent '${agent}' returned no result message.`);
+    }
+    return extractJson(resultText);
   }
 }
 

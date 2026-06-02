@@ -126,6 +126,10 @@
     function showError(msg) { const el = $("error"); el.textContent = msg; el.classList.remove("hidden"); }
 
     function render(data) {
+      const badge = $("mode");
+      badge.textContent = data.mode + " mode";
+      badge.style.background = data.mode === "live" ? "#2e844a" : "var(--warn)";
+      badge.style.color = data.mode === "live" ? "#fff" : "#2b2826";
       const pkg = data.result.deliverable;
       const metric = (k, v) => `<div class="metric"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
       $("summary").innerHTML = `

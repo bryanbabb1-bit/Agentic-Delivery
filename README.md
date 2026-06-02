@@ -53,6 +53,30 @@ the `FixtureRunner` for the `SdkRunner` in `web/intake-service.ts` (one function
 once that seam is wired. The server (`web/server.ts`) is dependency-free Node;
 per-submission output lands under `web/.runs/` (git-ignored).
 
+### Going live (real agents)
+
+The live seam is wired (`SdkRunner` in `driver/runner.ts`) against the Agent SDK:
+each subagent's `.md` is loaded and run single-shot, JSON in → JSON out. It needs
+Anthropic credentials and is **best validated on a credentialed machine** (this
+repo's CI/sandbox has none, and the SDK spawns the Claude Code process):
+
+```bash
+export ANTHROPIC_API_KEY=...           # required for live runs
+npm run intake -- examples/zennify-client360/sow.txt --auto   # CLI, unattended
+INTAKE_LIVE=1 npm run web              # web UI flips to live mode
+```
+
+Scope today: this powers the **plan stages** (parser → … → reconciler). The
+tool-using stages (builder/qa via DX MCP, handoff via Jira, prototype
+file-writing) still need their tools/MCP granted — see `DECISIONS.md`. Without
+`--auto`/credentials the pipeline pauses at the discovery loop and human gates by
+design.
+
+## Decision log
+
+Key choices and their rationale live in [`DECISIONS.md`](DECISIONS.md) — read it
+to understand *why* the repo looks the way it does.
+
 ## Status: Phase 1 runnable
 
 The structure, contracts, agents, skills, gates, and the deterministic driver are

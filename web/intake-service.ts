@@ -17,11 +17,20 @@ import { join } from "node:path";
 import { run, type RunResult } from "../driver/orchestrator.js";
 import {
   FixtureRunner,
+  SdkRunner,
   AutoConfirmDiscovery,
   AutoApproveHumanGate,
   type PipelineDeps,
 } from "../driver/runner.js";
 import { makeFixtures } from "../examples/zennify-client360/fixtures.js";
+
+/** Live mode requires opt-in AND credentials; otherwise we stay in demo mode. */
+export function isLiveMode(): boolean {
+  return (
+    process.env.INTAKE_LIVE === "1" &&
+    Boolean(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN)
+  );
+}
 
 export interface IntakeRequest {
   sowText: string;
@@ -51,19 +60,39 @@ function demoDeps(sowRef: string, outDir: string): PipelineDeps {
   };
 }
 
+/**
+ * Live dependencies: real agents via the Agent SDK. Discovery/gates are
+ * auto-resolved here because the web flow is unattended — a real engagement
+ * would route the discovery agenda back to the client instead.
+ */
+function liveDeps(cwd: string): PipelineDeps {
+  return {
+    runner: new SdkRunner({ cwd }),
+    discovery: new AutoConfirmDiscovery(),
+    humanGate: new AutoApproveHumanGate(),
+  };
+}
+
 export async function runIntake(req: IntakeRequest): Promise<IntakeResult> {
   if (!req.sowText.trim()) throw new Error("SOW text is empty.");
 
   const runId = randomUUID();
   const outDir = join(req.runsRoot, runId);
   const sowRef = req.sowRef?.trim() || `INTAKE-${runId.slice(0, 8)}`;
+  const live = isLiveMode();
 
-  const result = await run({ sowRef, sowText: req.sowText }, demoDeps(sowRef, outDir));
+  const result = await run(
+    { sowRef, sowText: req.sowText },
+    live ? liveDeps(process.cwd()) : demoDeps(sowRef, outDir),
+  );
 
-  const htmlFiles = (await readdir(outDir)).filter((f) => f.endsWith(".html"));
+  // Demo mode writes prototype HTML to outDir; live mode doesn't yet (the
+  // proto-build agent's Write tool is Phase 2), so tolerate a missing dir.
+  const htmlFiles = await readdir(outDir).catch(() => [] as string[]);
   const prototypes: PrototypeRef[] = htmlFiles
+    .filter((f) => f.endsWith(".html"))
     .sort((a, b) => (a === "index.html" ? -1 : b === "index.html" ? 1 : a.localeCompare(b)))
     .map((file) => ({ title: file.replace(/\.html$/, "").replace(/-/g, " "), file }));
 
-  return { mode: "demo", runId, sowRef, result, prototypes };
+  return { mode: live ? "live" : "demo", runId, sowRef, result, prototypes };
 }

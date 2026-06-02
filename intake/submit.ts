@@ -11,6 +11,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { run } from "../driver/orchestrator.js";
+import { AutoConfirmDiscovery, AutoApproveHumanGate } from "../driver/runner.js";
 
 const HELP = `sow-to-ship intake — submit a SOW, receive a deliverable package.
 
@@ -20,23 +21,27 @@ Usage:
 Options:
   --ref <id>     SOW reference id (default: derived from the filename)
   --out <file>   where to write the DeliverablePackage JSON (default: stdout)
+  --auto         auto-confirm discovery + auto-approve human gates (unattended
+                 run; demo/testing only — real engagements keep humans in these loops)
   -h, --help     show this help
 
-The agents, orchestration, and gates run out of sight. To iterate, resubmit with
-corrected assumptions through this same surface.`;
+By default the live SDK runner is used (set ANTHROPIC_API_KEY). The pipeline
+pauses at the discovery loop and the human gates unless --auto is passed.`;
 
 interface Args {
   sowFile?: string;
   ref?: string;
   out?: string;
+  auto: boolean;
   help: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { help: false };
+  const args: Args = { help: false, auto: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "-h" || a === "--help") args.help = true;
+    else if (a === "--auto") args.auto = true;
     else if (a === "--ref") args.ref = argv[++i];
     else if (a === "--out") args.out = argv[++i];
     else if (a && !a.startsWith("-")) args.sowFile ??= a;
@@ -55,7 +60,10 @@ async function main(): Promise<void> {
   const sowText = await readFile(args.sowFile, "utf8");
   const sowRef = args.ref ?? basename(args.sowFile).replace(/\.[^.]+$/, "");
 
-  const result = await run({ sowRef, sowText });
+  const deps = args.auto
+    ? { discovery: new AutoConfirmDiscovery(), humanGate: new AutoApproveHumanGate() }
+    : {};
+  const result = await run({ sowRef, sowText }, deps);
   const json = JSON.stringify(result.deliverable, null, 2);
 
   if (args.out) {
