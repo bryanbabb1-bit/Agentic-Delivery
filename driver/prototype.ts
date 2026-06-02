@@ -10,11 +10,27 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+export interface PrototypeRelatedList {
+  title: string;
+  columns: string[];
+  rows: string[][];
+}
+
 export interface PrototypeScreen {
   name: string;
+  /** Context line under the title, e.g. the client and segment. */
+  subtitle?: string;
   storyIds: string[];
+  /** Backing objects — shown as a small data-source note, not the headline. */
   objects: string[];
+  /** Record-detail field labels. */
   fields: string[];
+  /** Sample values per field label (so the page reads as real data, not "—"). */
+  fieldValues?: Record<string, string>;
+  /** Key facts shown as a highlights strip under the header. */
+  highlights?: { label: string; value: string }[];
+  /** Related-list tables (financial accounts, goals, activity, …). */
+  relatedLists?: PrototypeRelatedList[];
   interactions: string[];
 }
 
@@ -84,6 +100,15 @@ const BASE_CSS = `
   .slds-text-body_small { font-size:.8rem; }
   .slds-p-horizontal_small { padding-left:.75rem; padding-right:.75rem; }
   .slds-list_dotted { line-height:1.8; }
+  .highlights { display:flex; gap:.6rem; flex-wrap:wrap; margin:0 .75rem .75rem; }
+  .highlight { background:#fff; border:1px solid var(--border); border-radius:.25rem; padding:.55rem .85rem; min-width:120px; flex:1 1 auto; }
+  .highlight .k { font-size:.68rem; color:var(--weak); text-transform:uppercase; letter-spacing:.03em; }
+  .highlight .v { font-size:1.05rem; font-weight:700; margin-top:.15rem; }
+  .field-value { font-size:.85rem; }
+  table.rl { width:100%; border-collapse:collapse; font-size:.85rem; }
+  table.rl th { text-align:left; color:var(--weak); font-weight:600; font-size:.7rem; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid #e5e5e5; padding:.4rem .5rem; }
+  table.rl td { padding:.45rem .5rem; border-bottom:1px solid #f1f1f1; }
+  .data-source { color:var(--weak); font-size:.72rem; }
 `;
 
 export function slug(s: string): string {
@@ -154,31 +179,54 @@ function renderFields(screen: PrototypeScreen): string {
   if (screen.fields.length === 0) {
     return `            <p class="slds-text-body_small slds-text-color_weak">No fields specified.</p>`;
   }
+  const values = screen.fieldValues ?? {};
   return screen.fields
-    .map(
-      (f) => `            <div class="slds-form-element slds-form-element_readonly slds-form-element_horizontal">
+    .map((f) => {
+      const v = values[f];
+      const control = v
+        ? `<span class="field-value">${escapeHtml(v)}</span>`
+        : `<span class="slds-text-color_weak">—</span>`;
+      return `            <div class="slds-form-element slds-form-element_readonly slds-form-element_horizontal">
               <span class="slds-form-element__label">${escapeHtml(f)}</span>
-              <div class="slds-form-element__control"><div class="slds-form-element__static slds-text-color_weak">—</div></div>
-            </div>`,
-    )
+              <div class="slds-form-element__control">${control}</div>
+            </div>`;
+    })
     .join("\n");
 }
 
-function renderObjects(screen: PrototypeScreen): string {
-  if (screen.objects.length === 0) return "";
-  const pills = screen.objects
+function renderHighlights(screen: PrototypeScreen): string {
+  if (!screen.highlights || screen.highlights.length === 0) return "";
+  const cells = screen.highlights
     .map(
-      (o) => `              <li class="slds-item"><span class="slds-pill"><span class="slds-pill__label">${escapeHtml(o)}</span></span></li>`,
+      (h) => `    <div class="highlight"><div class="k">${escapeHtml(h.label)}</div><div class="v">${escapeHtml(h.value)}</div></div>`,
     )
     .join("\n");
-  return `          <article class="slds-card slds-m-bottom_small">
-            <div class="slds-card__header"><h2 class="slds-card__header-title slds-text-heading_small">Objects</h2></div>
-            <div class="slds-card__body slds-card__body_inner">
-              <ul class="slds-list_horizontal slds-has-dividers_right">
-${pills}
-              </ul>
-            </div>
-          </article>`;
+  return `  <div class="highlights">
+${cells}
+  </div>`;
+}
+
+function renderRelatedLists(screen: PrototypeScreen): string {
+  if (!screen.relatedLists || screen.relatedLists.length === 0) return "";
+  return screen.relatedLists
+    .map((rl) => {
+      const head = rl.columns.map((c) => `<th>${escapeHtml(c)}</th>`).join("");
+      const body = rl.rows
+        .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
+        .join("\n              ");
+      return `      <article class="slds-card">
+        <div class="slds-card__header"><h2 class="slds-card__header-title slds-text-heading_small">${escapeHtml(rl.title)}</h2></div>
+        <div class="slds-card__body slds-card__body_inner">
+          <table class="rl">
+            <thead><tr>${head}</tr></thead>
+            <tbody>
+              ${body}
+            </tbody>
+          </table>
+        </div>
+      </article>`;
+    })
+    .join("\n");
 }
 
 function renderScreen(opts: RenderOptions, screen: PrototypeScreen): PrototypeFile {
@@ -210,15 +258,15 @@ ${renderNav(opts.screens, filename)}
         <div class="slds-media">
           <div class="slds-media__body">
             <h1 class="slds-page-header__title slds-truncate">${escapeHtml(screen.name)}</h1>
-            <p class="slds-page-header__name-meta">Stories: ${escapeHtml(screen.storyIds.join(", ") || "—")}</p>
+            <p class="slds-page-header__name-meta">${escapeHtml(screen.subtitle ?? `Stories: ${screen.storyIds.join(", ") || "—"}`)}</p>
           </div>
         </div>
       </div>
     </div>
   </div>
+${renderHighlights(screen)}
   <div class="slds-grid slds-gutters slds-p-horizontal_small slds-wrap">
     <div class="slds-col slds-size_2-of-3">
-${renderObjects(screen)}
       <article class="slds-card">
         <div class="slds-card__header"><h2 class="slds-card__header-title slds-text-heading_small">Record detail</h2></div>
         <div class="slds-card__body slds-card__body_inner">
@@ -226,6 +274,8 @@ ${renderFields(screen)}
         </div>
         <div class="slds-card__footer slds-text-body_small">Interactions: ${interactions}</div>
       </article>
+${renderRelatedLists(screen)}
+      <p class="data-source slds-p-horizontal_small">Data source: ${escapeHtml(screen.objects.join(", ") || "—")} · stories ${escapeHtml(screen.storyIds.join(", ") || "—")}</p>
     </div>
     <aside class="slds-col slds-size_1-of-3">
       <article class="slds-card">

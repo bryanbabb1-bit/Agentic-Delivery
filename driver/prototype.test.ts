@@ -81,3 +81,42 @@ describe("renderPrototype", () => {
     expect(screen.html).toContain("Financial Goals");
   });
 });
+
+describe("renderPrototype (rich content)", () => {
+  const rich: RenderOptions = {
+    sowRef: "DEMO",
+    assumptions: [],
+    screens: [
+      {
+        name: "Client 360 — Jordan Rivera",
+        subtitle: "Person Account · Mass Affluent",
+        storyIds: ["US-01.1"],
+        objects: ["Account"],
+        fields: ["Name", "Email"],
+        fieldValues: { Name: "Jordan Rivera", Email: "jordan.rivera@example.com" },
+        highlights: [{ label: "Total assets", value: "$842,300" }],
+        relatedLists: [
+          { title: "Financial Accounts", columns: ["Account", "Balance"], rows: [["Brokerage ••8830", "$615,400"]] },
+        ],
+        interactions: [],
+      },
+    ],
+  };
+
+  const html = renderPrototype(rich).find((f) => f.filename === "client-360-jordan-rivera.html")!.html;
+
+  it("shows the subtitle, real field values (not placeholders), and highlights", () => {
+    expect(html).toContain("Person Account · Mass Affluent");
+    expect(html).toContain("Jordan Rivera");
+    expect(html).toContain("jordan.rivera@example.com");
+    expect(html).toContain("Total assets");
+    expect(html).toContain("$842,300");
+  });
+
+  it("renders related-list tables with sample rows", () => {
+    expect(html).toContain("Financial Accounts");
+    expect(html).toContain("<table class=\"rl\">");
+    expect(html).toContain("Brokerage ••8830");
+    expect(html).toContain("$615,400");
+  });
+});

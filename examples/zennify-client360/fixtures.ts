@@ -152,18 +152,55 @@ export function makeFixtures(options: FixtureOptions = {}): FixtureMap {
     "proto-layout": () => ({
       screens: [
         {
-          name: "Client 360 Profile",
+          name: "Client 360 — Jordan Rivera",
+          subtitle: "Person Account · Mass Affluent · Client since 2018 · Advisor: you",
           storyIds: ["US-01.1"],
-          objects: ["Account", "FinServ__FinancialAccount__c"],
-          fields: [
-            "Name",
-            "PersonEmail",
-            "PersonHomePhone",
-            "Financial Accounts",
-            "Financial Goals",
-            "Recent Activity",
+          objects: ["Account (Person Account)", "FinServ__FinancialAccount__c"],
+          highlights: [
+            { label: "Total assets", value: "$842,300" },
+            { label: "Accounts", value: "3" },
+            { label: "Goals on track", value: "1 of 2" },
+            { label: "Risk profile", value: "Moderate" },
+            { label: "Next review", value: "Jul 2026" },
           ],
-          interactions: ["open profile", "view goals", "view recent activity"],
+          fields: ["Name", "Email", "Phone", "Household", "Segment", "Primary advisor"],
+          fieldValues: {
+            Name: "Jordan Rivera",
+            Email: "jordan.rivera@example.com",
+            Phone: "(415) 555-0142",
+            Household: "Rivera Household",
+            Segment: "Mass Affluent",
+            "Primary advisor": "You",
+          },
+          relatedLists: [
+            {
+              title: "Financial Accounts",
+              columns: ["Account", "Type", "Balance"],
+              rows: [
+                ["Checking ••4021", "Checking", "$12,500"],
+                ["Brokerage ••8830", "Investment", "$615,400"],
+                ["IRA ••2275", "Retirement", "$214,400"],
+              ],
+            },
+            {
+              title: "Financial Goals",
+              columns: ["Goal", "Target", "Progress"],
+              rows: [
+                ["Retirement", "$2.0M", "31%"],
+                ["College fund", "$180,000", "58%"],
+              ],
+            },
+            {
+              title: "Recent Activity",
+              columns: ["Date", "Activity"],
+              rows: [
+                ["May 28", "Call — reviewed Q2 portfolio"],
+                ["May 14", "Email — sent rebalancing proposal"],
+                ["Apr 30", "Meeting — annual financial review"],
+              ],
+            },
+          ],
+          interactions: ["open profile", "view goals", "log activity"],
         },
       ],
     }),

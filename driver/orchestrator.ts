@@ -109,9 +109,21 @@ const ScreenInventory = z.object({
   screens: z.array(
     z.object({
       name: z.string(),
+      subtitle: z.string().optional(),
       storyIds: z.array(z.string()).default([]),
       objects: z.array(z.string()).default([]),
       fields: z.array(z.string()).default([]),
+      fieldValues: z.record(z.string()).optional(),
+      highlights: z.array(z.object({ label: z.string(), value: z.string() })).optional(),
+      relatedLists: z
+        .array(
+          z.object({
+            title: z.string(),
+            columns: z.array(z.string()),
+            rows: z.array(z.array(z.string())),
+          }),
+        )
+        .optional(),
       interactions: z.array(z.string()).default([]),
     }),
   ),

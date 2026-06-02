@@ -59,9 +59,17 @@ npm run example     # drives examples/zennify-client360 SOW → reconciled packa
 ```
 
 `proto-build` renders real Lightning-looking screens (`driver/prototype.ts`):
-each screen is a self-contained SLDS page with a visible, contestable assumption
-panel — the disposable v1 the client reacts to in discovery. Open
-`prototypes/index.html` after running the example.
+each screen is a self-contained SLDS page (CSS inlined — renders offline, no CDN)
+with highlights, sample record data, related-list tables, and a visible,
+contestable assumption panel — the disposable v1 the client reacts to in
+discovery. Open `prototypes/index.html` after running the example.
+
+### Visual QA
+
+```bash
+npx playwright install chromium   # one-time, where the network allows it
+npm run qa:screenshot             # render prototypes/*.html → PNGs for eyeballing
+```
 
 ## Develop
 
