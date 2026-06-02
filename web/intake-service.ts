@@ -6,15 +6,18 @@
  * handoff, and the rendered prototype files (written to a per-run directory the
  * server can serve).
  *
- * DEMO MODE: this wires the FixtureRunner, so every submission returns the
- * recorded Zennify Client-360 outputs regardless of the SOW text. Swapping
- * `demoDeps()` for the SdkRunner (once wired) turns this into live generation
- * with no other changes here.
+ * DEMO MODE: wires the FixtureRunner, so every submission returns the recorded
+ * Zennify Client-360 outputs regardless of the SOW text, and runs the FULL
+ * pipeline (the build/qa/handoff stages are satisfied by fixtures).
+ *
+ * LIVE MODE (INTAKE_LIVE=1 + credentials): runs real agents but only the PLAN
+ * PHASE (parse → … → reconcile + prototype) — no DX MCP / org required. This is
+ * the hardened front half; the grounded build is the Phase-2 path.
  */
 import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { run, type RunResult } from "../driver/orchestrator.js";
+import { run, runPlanPhase, type PlanResult, type RunResult } from "../driver/orchestrator.js";
 import {
   FixtureRunner,
   SdkRunner,
@@ -47,7 +50,8 @@ export interface IntakeResult {
   mode: "demo" | "live";
   runId: string;
   sowRef: string;
-  result: RunResult;
+  /** Demo runs the full pipeline (handoff present); live runs the plan phase only. */
+  result: PlanResult & { handoff?: RunResult["handoff"] };
   prototypes: PrototypeRef[];
 }
 
@@ -80,11 +84,12 @@ export async function runIntake(req: IntakeRequest): Promise<IntakeResult> {
   const outDir = join(req.runsRoot, runId);
   const sowRef = req.sowRef?.trim() || `INTAKE-${runId.slice(0, 8)}`;
   const live = isLiveMode();
+  const runInput = { sowRef, sowText: req.sowText, prototypeOut: { dir: outDir } };
 
-  const result = await run(
-    { sowRef, sowText: req.sowText, prototypeOut: { dir: outDir } },
-    live ? liveDeps(process.cwd()) : demoDeps(),
-  );
+  // Live = real agents, front half only (no org). Demo = full pipeline via fixtures.
+  const result = live
+    ? await runPlanPhase(runInput, liveDeps(process.cwd()))
+    : await run(runInput, demoDeps());
 
   // The driver renders prototypes into outDir in both demo and live mode;
   // tolerate a missing dir defensively.

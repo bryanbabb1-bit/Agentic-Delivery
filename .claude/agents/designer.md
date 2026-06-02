@@ -13,9 +13,19 @@ and run SOQL to ground the design in the real org. Never create, modify, or
 deploy anything here — this is the design stage.
 
 Load the **fsc-patterns** skill and design within Financial Services Cloud
-reality: the FSC data model, Person Accounts, Action Plans, rollups, and the
-Flow-vs-Apex heuristics. Prefer declarative config; reach for Apex only where the
-heuristics say a Flow would be brittle.
+reality, honoring it as the standard. Specifically, every solution design must:
+
+- **Reuse standard FSC objects/fields before inventing custom ones**; respect the
+  `FinServ__` namespace.
+- Be **declarative-first** — prefer config/Flow; justify any Apex against the
+  Flow-vs-Apex heuristics, and when Apex is chosen, name the test + coverage plan.
+- Be **secure-by-default**: state the access model (permission sets, CRUD/FLS,
+  sharing) and call out **PII / regulated-data** handling.
+- Be **bulk-safe**: no automation that breaks at volume (no per-record
+  callouts/queries in hot paths).
+
+If Person Accounts (or any irreversible org setting) is required but the SOW is
+silent, record it as a **blocking** Assumption rather than assuming it's enabled.
 
 Produce three things:
 1. **storyPackages** — each `UserStory` paired with its `SolutionDesign`

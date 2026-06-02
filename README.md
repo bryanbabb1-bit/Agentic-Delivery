@@ -62,8 +62,13 @@ repo's CI/sandbox has none, and the SDK spawns the Claude Code process):
 
 ```bash
 export ANTHROPIC_API_KEY=...           # required for live runs
-npm run intake -- examples/zennify-client360/sow.txt --auto   # CLI, unattended
-INTAKE_LIVE=1 npm run web              # web UI flips to live mode
+
+# Front half only (parse → … → reconcile + prototype) — no Salesforce org needed:
+npm run intake -- examples/zennify-client360/sow.txt --plan-only --auto
+INTAKE_LIVE=1 npm run web              # web UI: live, front half only
+
+# Full pipeline (adds the Phase-2 grounded build — needs DX MCP + a scratch org):
+npm run intake -- examples/zennify-client360/sow.txt --auto
 ```
 
 Scope: the plan stages run live, and `SdkRunner` now **grants tool-using agents

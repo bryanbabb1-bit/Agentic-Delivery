@@ -6,12 +6,13 @@
  * the result is a reconciled, UAT-ready package with honest boundaries.
  */
 import { describe, it, expect } from "vitest";
-import { run, GateBlocked } from "../../driver/orchestrator.js";
+import { run, runPlanPhase, GateBlocked } from "../../driver/orchestrator.js";
 import {
   FixtureRunner,
   AutoConfirmDiscovery,
   AutoApproveHumanGate,
   PausingDiscovery,
+  type DiscoveryProvider,
 } from "../../driver/runner.js";
 import { fixtures } from "./fixtures.js";
 
@@ -59,6 +60,24 @@ describe("Zennify Client-360 pipeline (end to end)", () => {
         { runner: new FixtureRunner(fixtures), discovery: new PausingDiscovery(), humanGate: new AutoApproveHumanGate() },
       ),
     ).rejects.toThrow(/Discovery loop reached/);
+  });
+
+  it("runPlanPhase produces the deliverable without running the build", async () => {
+    const plan = await runPlanPhase({ sowRef: "ZEN-SBH-CLIENT360", sowText: SOW }, deterministicDeps());
+    expect(plan.deliverable.status).toBe("reconciled");
+    expect(plan.deliverable.mockups.length).toBeGreaterThan(0);
+    expect(plan.assumptions.length).toBeGreaterThan(0);
+    expect((plan as { handoff?: unknown }).handoff).toBeUndefined();
+  });
+
+  it("fails loudly when discovery never resolves a blocking assumption", async () => {
+    const neverResolves: DiscoveryProvider = { async collectVerdicts() { return []; } };
+    await expect(
+      runPlanPhase(
+        { sowRef: "ZEN-SBH-CLIENT360", sowText: SOW },
+        { runner: new FixtureRunner(fixtures), discovery: neverResolves, humanGate: new AutoApproveHumanGate() },
+      ),
+    ).rejects.toThrow(/did not converge/);
   });
 
   it("blocks at the deploy-test gate when QA reports a failure", async () => {

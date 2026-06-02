@@ -50,8 +50,9 @@ type Out<S extends z.ZodTypeAny> = z.infer<S>;
 
 /** Raised when an agent's output doesn't satisfy its contract — halts at the seam. */
 export class ContractViolation extends Error {
-  constructor(stage: string, readonly issues: z.ZodError) {
-    super(`Contract violation at stage '${stage}': ${issues.message}`);
+  constructor(stage: string, readonly issues: z.ZodError, raw?: unknown) {
+    const got = raw === undefined ? "" : ` | got: ${JSON.stringify(raw).slice(0, 300)}`;
+    super(`Contract violation at stage '${stage}': ${issues.message}${got}`);
     this.name = "ContractViolation";
   }
 }
@@ -92,7 +93,7 @@ async function runStage<S extends z.ZodTypeAny>(
   const raw = await deps.runner.run(stage.agent, input);
 
   const parsed = stage.outputSchema.safeParse(raw);
-  if (!parsed.success) throw new ContractViolation(stage.name, parsed.error);
+  if (!parsed.success) throw new ContractViolation(stage.name, parsed.error, raw);
   const output = parsed.data;
 
   if (stage.gate) {
@@ -184,13 +185,21 @@ export interface RunInput {
   prototypeOut?: { dir: string };
 }
 
-export interface RunResult {
+/** The front-half output: the deliverable package the client reacts to. */
+export interface PlanResult {
   deliverable: DeliverablePackage;
   /** The post-discovery assumption register (confirmed/corrected). */
   assumptions: Assumption[];
   reconciled: V2;
+}
+
+/** The full pipeline output: the plan phase plus the grounded build's handoff. */
+export interface RunResult extends PlanResult {
   handoff: HandoffPackage;
 }
+
+/** Safety bound so a non-converging discovery loop can't spin forever. */
+const MAX_DISCOVERY_ROUNDS = 6;
 
 /**
  * Drive a signed SOW to a client-ready handoff package, per the §1 flow:
@@ -201,14 +210,9 @@ export interface RunResult {
  *
  * (* = gated). Stages are sequenced and seam-checked here; the actual agent work
  * happens behind the injected runner. The discovery loop iterates Sprint-0 style
- * until no blocking assumption remains.
+ * until no blocking assumption remains (bounded by MAX_DISCOVERY_ROUNDS).
  */
-export async function run(
-  input: RunInput,
-  depsOverride: Partial<PipelineDeps> = {},
-): Promise<RunResult> {
-  const deps: PipelineDeps = { ...defaultDeps(), ...depsOverride };
-
+async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResult> {
   // ---- Plan ----------------------------------------------------------------
   const sowItems = await runStage(
     { name: "parse", agent: "parser", inputSchema: z.string(), outputSchema: z.array(SowItem) },
@@ -304,8 +308,17 @@ export async function run(
   });
 
   // ---- Discovery (human loop) ---------------------------------------------
+  // Iterates Sprint-0 style until no blocking assumption remains, bounded so a
+  // provider that never resolves a blocker fails loudly instead of hanging.
   let assumptions: Assumption[] = design.assumptions;
+  let round = 0;
   do {
+    if (++round > MAX_DISCOVERY_ROUNDS) {
+      const remaining = assumptions.filter((a) => a.blocking).map((a) => a.id).join(", ");
+      throw new Error(
+        `Discovery did not converge after ${MAX_DISCOVERY_ROUNDS} rounds; blocking assumptions remain: ${remaining || "(none reported)"}.`,
+      );
+    }
     const agenda = buildAssumptionAgenda(deliverable, assumptions);
     const verdicts: AssumptionVerdict[] = await deps.discovery.collectVerdicts(agenda);
     assumptions = applyVerdicts(assumptions, verdicts);
@@ -319,11 +332,36 @@ export async function run(
     v1,
     deps,
   );
-  deliverable = reconciled.base;
+  return { deliverable: reconciled.base, assumptions, reconciled };
+}
+
+/**
+ * Run only the front half — parse → … → reconcile — and return the deliverable
+ * package the client reacts to. Needs no Salesforce org, so this is the seam to
+ * test/iterate on before the grounded build is wired. (Build/QA/handoff are the
+ * Phase-2 path; see `run`.)
+ */
+export async function runPlanPhase(
+  input: RunInput,
+  depsOverride: Partial<PipelineDeps> = {},
+): Promise<PlanResult> {
+  return planPhase(input, { ...defaultDeps(), ...depsOverride });
+}
+
+/**
+ * Drive a signed SOW all the way to a client-ready handoff: the plan phase, then
+ * the grounded build → QA (deploy-test gate) → handoff (handoff gate).
+ */
+export async function run(
+  input: RunInput,
+  depsOverride: Partial<PipelineDeps> = {},
+): Promise<RunResult> {
+  const deps: PipelineDeps = { ...defaultDeps(), ...depsOverride };
+  const plan = await planPhase(input, deps);
 
   // ---- Grounded build → QA (deploy-test gate) → handoff (handoff gate) -----
   const builds: BuildResult[] = [];
-  for (const designNote of deliverable.epicDesigns) {
+  for (const designNote of plan.deliverable.epicDesigns) {
     const build = await runStage(
       { name: "build", agent: "builder", inputSchema: DesignNote, outputSchema: BuildResult },
       designNote,
@@ -350,5 +388,5 @@ export async function run(
     throw new Error("Pipeline produced no handoff package — no buildable design notes were present.");
   }
 
-  return { deliverable, assumptions, reconciled, handoff: lastHandoff };
+  return { ...plan, handoff: lastHandoff };
 }

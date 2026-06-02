@@ -79,6 +79,26 @@ bites with real coverage (§8). **Still deferred / untested:** an actual
 `builder`/`qa` run needs a connected DX MCP + a target org (none here); never
 point it at production (`BuildResult.isProduction` is a literal `false`).
 
+### 2026-06-02 · Harden + isolate the front half (parse → mockup)
+**Decided:** Split the pipeline so `runPlanPhase` runs parse → … → reconcile +
+prototype on its own, with **no Salesforce org required**, and is the focus for
+testing/iteration. `run` builds on it for the Phase-2 grounded build. Live mode
+(CLI `--plan-only`, web `INTAKE_LIVE=1`) runs only the front half so it's testable
+without the untested DX MCP path. **Also hardened:** the discovery loop is bounded
+(`MAX_DISCOVERY_ROUNDS`) so a non-converging provider fails loudly; contract
+violations now include a snippet of the offending output for live debugging.
+
+### 2026-06-02 · Deepen the Salesforce best-practice standards
+**Decided:** Expand `fsc-patterns` (security/FLS/sharing, bulkification + governor
+limits, one-trigger-per-object, no hardcoded IDs, test rigor, declarative-first,
+aggregations, environments) and require the `designer` to honor them
+(standard-objects-first, secure-by-default, bulk-safe, PII-aware, Person-Accounts
+as a blocking assumption when unstated). Reconciled `slds-fidelity` with the
+deterministic self-contained renderer. **Caveat:** these are house standards and
+must be **ratified by a Salesforce-certified architect** on the team — treat as
+the floor, not authoritative. The plan-only agents (parser/planner/story-writer)
+remain intentionally platform-agnostic.
+
 ### 2026-06-02 · Environment constraints (recorded)
 This managed sandbox has **no Anthropic credentials** (API reachable, 401) and
 **blocks browser-binary downloads** (Playwright/Chromium 403 "Host not in

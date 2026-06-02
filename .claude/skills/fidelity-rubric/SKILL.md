@@ -20,6 +20,9 @@ fail.
    violation.
 4. **No silent scope creep** — does the screen imply work beyond the stories it
    claims to serve?
+5. **Data sensitivity & licensing** — does it expose PII / regulated financial
+   data without an access story, or assume an FSC feature/license/edition not in
+   scope? Flag it.
 
 ## Violation shape
 

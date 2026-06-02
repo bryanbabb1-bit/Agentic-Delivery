@@ -10,7 +10,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { run } from "../driver/orchestrator.js";
+import { run, runPlanPhase } from "../driver/orchestrator.js";
 import { AutoConfirmDiscovery, AutoApproveHumanGate } from "../driver/runner.js";
 
 const HELP = `sow-to-ship intake — submit a SOW, receive a deliverable package.
@@ -21,6 +21,8 @@ Usage:
 Options:
   --ref <id>     SOW reference id (default: derived from the filename)
   --out <file>   where to write the DeliverablePackage JSON (default: stdout)
+  --plan-only    run only the front half (parse → … → reconcile + prototype);
+                 no Salesforce org / DX MCP required
   --auto         auto-confirm discovery + auto-approve human gates (unattended
                  run; demo/testing only — real engagements keep humans in these loops)
   -h, --help     show this help
@@ -33,15 +35,17 @@ interface Args {
   ref?: string;
   out?: string;
   auto: boolean;
+  planOnly: boolean;
   help: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { help: false, auto: false };
+  const args: Args = { help: false, auto: false, planOnly: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "-h" || a === "--help") args.help = true;
     else if (a === "--auto") args.auto = true;
+    else if (a === "--plan-only") args.planOnly = true;
     else if (a === "--ref") args.ref = argv[++i];
     else if (a === "--out") args.out = argv[++i];
     else if (a && !a.startsWith("-")) args.sowFile ??= a;
@@ -63,7 +67,9 @@ async function main(): Promise<void> {
   const deps = args.auto
     ? { discovery: new AutoConfirmDiscovery(), humanGate: new AutoApproveHumanGate() }
     : {};
-  const result = await run({ sowRef, sowText }, deps);
+  const result = args.planOnly
+    ? await runPlanPhase({ sowRef, sowText }, deps)
+    : await run({ sowRef, sowText }, deps);
   const json = JSON.stringify(result.deliverable, null, 2);
 
   if (args.out) {

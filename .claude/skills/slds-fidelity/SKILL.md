@@ -4,17 +4,21 @@ description: Rules for building an authentic Lightning/SLDS prototype constraine
 ---
 # SLDS Fidelity
 
-Used by: `proto-build`. The prototype must look like real Lightning AND stay
-within what the platform can natively deliver — it is the contract the fidelity
-gate later checks against.
+Used by: `proto-layout` (and the deterministic renderer in `driver/prototype.ts`).
+The prototype must look like real Lightning AND stay within what the platform can
+natively deliver — it is the contract the fidelity gate later checks against.
+
+> Rendering note: HTML is produced **deterministically by the driver** from the
+> screen inventory, not by an LLM, and is **self-contained** (CSS inlined, no
+> external CDN) so it renders offline. `proto-layout`'s job is to choose
+> screens/fields/components that honor the rules below.
 
 ## Look authentic
 
-- Use the **Salesforce Lightning Design System (SLDS)** — real classes, spacing,
-  typography, and component markup. Link the SLDS stylesheet; do not hand-roll a
-  look-alike.
-- Reproduce standard Lightning chrome: page headers, record-detail two-column
-  layouts, related lists, tabs, path components, and standard buttons.
+- Use **SLDS** classes/structure — real spacing, typography, and component
+  markup; never a hand-rolled look-alike.
+- Reproduce standard Lightning chrome: page headers, record-detail layouts,
+  related lists, highlights panels, tabs, path, and standard buttons.
 
 ## Stay buildable — constrain to FSC-native components
 

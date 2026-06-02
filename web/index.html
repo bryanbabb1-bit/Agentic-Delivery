@@ -131,6 +131,7 @@
       badge.style.background = data.mode === "live" ? "#2e844a" : "var(--warn)";
       badge.style.color = data.mode === "live" ? "#fff" : "#2b2826";
       const pkg = data.result.deliverable;
+      const handoff = data.result.handoff;
       const metric = (k, v) => `<div class="metric"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
       $("summary").innerHTML = `
         <div class="metrics">
@@ -138,9 +139,9 @@
           ${metric("Epics", pkg.epics.length)}
           ${metric("Stories", pkg.storyPackages.length)}
           ${metric("Mockups", pkg.mockups.length)}
-          ${metric("Boundaries", data.result.handoff.knownBoundaries.length)}
+          ${handoff ? metric("Boundaries", handoff.knownBoundaries.length) : metric("Phase", "plan")}
         </div>
-        <p class="note" style="margin-top:.75rem;">SOW <strong>${esc(data.sowRef)}</strong> · reconcile diff: ${data.result.reconciled.changes.length} change(s), ${data.result.reconciled.scopeDeltas.length} scope delta(s) · handoff: UAT-ready.</p>`;
+        <p class="note" style="margin-top:.75rem;">SOW <strong>${esc(data.sowRef)}</strong> · reconcile diff: ${data.result.reconciled.changes.length} change(s), ${data.result.reconciled.scopeDeltas.length} scope delta(s)${handoff ? " · handoff: UAT-ready" : " · plan phase (no grounded build)"}.</p>`;
 
       const asms = data.result.assumptions || [];
       $("asmCard").classList.toggle("hidden", asms.length === 0);
