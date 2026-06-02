@@ -50,9 +50,12 @@ describe("renderPrototype", () => {
     ]);
   });
 
-  it("links SLDS and renders clickable nav between screens", () => {
+  it("is self-contained (inline CSS, no external CDN) and renders clickable nav", () => {
     const screen = files.find((f) => f.filename === "client-360-profile.html")!;
-    expect(screen.html).toContain("salesforce-lightning-design-system");
+    expect(screen.html).toContain("<style>"); // CSS inlined
+    expect(screen.html).not.toContain("http://");
+    expect(screen.html).not.toContain("https://"); // no network dependency
+    expect(screen.html).toContain(".slds-card"); // the inlined stylesheet
     expect(screen.html).toContain('href="funding-goals.html"');
     expect(screen.html).toContain("slds-tabs_default");
   });

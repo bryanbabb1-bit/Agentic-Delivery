@@ -38,8 +38,53 @@ export interface RenderOptions {
   assumptions: PrototypeAssumption[];
 }
 
-const SLDS_CSS =
-  "https://cdnjs.cloudflare.com/ajax/libs/design-system/2.24.4/styles/salesforce-lightning-design-system.min.css";
+/**
+ * A compact, self-contained Lightning-flavored stylesheet covering the SLDS
+ * classes this generator emits. Inlined into every page so prototypes render
+ * fully offline — no CDN, no network — which is what a sandboxed file preview
+ * (and an air-gapped discovery laptop) needs.
+ */
+const BASE_CSS = `
+  :root { --brand:#0176d3; --border:#c9c9c9; --bg:#f3f3f3; --weak:#5c5c5c; --warn:#fe9339; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#181818; background:var(--bg); }
+  .prototype-banner { background:#faffbd; border-bottom:1px solid #e4e466; padding:.4rem; text-align:center; font-size:.75rem; }
+  .slds-tabs_default__nav { display:flex; gap:.25rem; list-style:none; margin:0; padding:0 1rem; border-bottom:1px solid var(--border); background:#fff; }
+  .slds-tabs_default__link { display:inline-block; padding:.6rem .9rem; text-decoration:none; color:var(--weak); border-bottom:3px solid transparent; }
+  .slds-tabs_default__item.slds-is-active .slds-tabs_default__link { color:var(--brand); border-bottom-color:var(--brand); font-weight:600; }
+  .slds-page-header { background:#fff; border:1px solid var(--border); border-radius:.25rem; padding:1rem; margin:.75rem; }
+  .slds-page-header__title { font-size:1.25rem; font-weight:700; margin:0; }
+  .slds-page-header__name-meta { color:var(--weak); font-size:.8rem; margin:.25rem 0 0; }
+  .slds-grid { display:flex; }
+  .slds-grid.slds-wrap { flex-wrap:wrap; }
+  .slds-grid_align-spread { justify-content:space-between; align-items:center; }
+  .slds-gutters { gap:.75rem; }
+  .slds-col { flex:1 1 auto; }
+  .slds-size_2-of-3 { flex:0 0 64%; max-width:64%; }
+  .slds-size_1-of-3 { flex:0 0 33%; max-width:33%; }
+  @media (max-width:640px){ .slds-size_2-of-3,.slds-size_1-of-3{ flex-basis:100%; max-width:100%; } }
+  .slds-card, .slds-box { background:#fff; border:1px solid var(--border); border-radius:.25rem; }
+  .slds-card { margin-bottom:.75rem; }
+  .slds-card__header { padding:.75rem 1rem; border-bottom:1px solid #e5e5e5; }
+  .slds-card__header-title { font-size:.9rem; font-weight:700; margin:0; }
+  .slds-card__body_inner { padding:.75rem 1rem; }
+  .slds-card__footer { padding:.6rem 1rem; border-top:1px solid #e5e5e5; color:var(--weak); font-size:.8rem; }
+  .slds-box { padding:.75rem; margin-bottom:.5rem; }
+  .slds-list_horizontal { display:flex; flex-wrap:wrap; gap:.4rem; list-style:none; margin:0; padding:0; }
+  .slds-pill { display:inline-flex; align-items:center; background:#f3f2f2; border:1px solid var(--border); border-radius:999px; padding:.15rem .6rem; font-size:.8rem; margin-right:.25rem; }
+  .slds-badge { display:inline-block; background:#ecebea; border-radius:.25rem; padding:.1rem .5rem; font-size:.7rem; text-transform:uppercase; letter-spacing:.03em; }
+  .slds-theme_warning { background:var(--warn); color:#2b2826; }
+  .slds-button { display:inline-block; width:auto; padding:.4rem .75rem; border-radius:.25rem; border:1px solid var(--brand); background:#fff; color:var(--brand); font-size:.8rem; cursor:pointer; margin-top:.25rem; }
+  .slds-button_neutral { border-color:var(--border); color:#181818; }
+  .slds-button_stretch { display:block; width:100%; }
+  .slds-form-element_horizontal { display:flex; justify-content:space-between; padding:.4rem 0; border-bottom:1px solid #f1f1f1; }
+  .slds-form-element__label { color:var(--weak); font-size:.8rem; }
+  .slds-text-title_caps { text-transform:uppercase; font-size:.7rem; letter-spacing:.03em; color:var(--weak); font-weight:700; }
+  .slds-text-color_weak { color:var(--weak); }
+  .slds-text-body_small { font-size:.8rem; }
+  .slds-p-horizontal_small { padding-left:.75rem; padding-right:.75rem; }
+  .slds-list_dotted { line-height:1.8; }
+`;
 
 export function slug(s: string): string {
   return s
@@ -152,11 +197,7 @@ function renderScreen(opts: RenderOptions, screen: PrototypeScreen): PrototypeFi
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(screen.name)} — ${escapeHtml(opts.sowRef)} prototype</title>
-  <link rel="stylesheet" href="${SLDS_CSS}" />
-  <style>
-    body { padding: 0; }
-    .prototype-banner { background: #faffbd; border-bottom: 1px solid #e4e466; }
-  </style>
+  <style>${BASE_CSS}</style>
 </head>
 <body>
   <div class="prototype-banner slds-p-around_x-small slds-text-align_center slds-text-body_small">
@@ -217,11 +258,12 @@ export function renderPrototype(opts: RenderOptions): PrototypeFile[] {
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(opts.sowRef)} prototype</title>
-  <link rel="stylesheet" href="${SLDS_CSS}" />
+  <style>${BASE_CSS}</style>
 </head>
 <body>
-  <div class="slds-p-around_medium">
-    <h1 class="slds-text-heading_large slds-m-bottom_small">${escapeHtml(opts.sowRef)} — prototype</h1>
+  <div style="padding:1.5rem;">
+    <h1 style="font-size:1.5rem;font-weight:700;margin:0 0 1rem;">${escapeHtml(opts.sowRef)} — prototype</h1>
+    <p class="slds-text-body_small slds-text-color_weak" style="margin-top:0;">Disposable v1 — click a screen to review it with the client.</p>
     <ul class="slds-list_dotted">
 ${links}
     </ul>
