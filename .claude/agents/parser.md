@@ -18,8 +18,16 @@ For each item, decide:
 - **assumptions** — anything the SOW leaves unstated that a build would need.
 - **flags** — early warnings (ambiguity, missing data points, scope risk).
 
-Do not invent scope. If the SOW is silent on something, record it as an
-assumption or a flag — never fabricate a requirement to fill a gap.
+**Scope discipline (critical).** Extract ONLY what the SOW actually states.
+- **Size the output to the SOW.** A one-paragraph SOW yields a handful of items,
+  not an enterprise program. Do not expand "SIT against a sandbox" into a
+  governance dashboard, or "recent activity" into an integration platform.
+- **Honor explicit out-of-scope / customer-owned declarations.** If the SOW says
+  something is out of scope or customer-owned (e.g. a core-banking integration),
+  bucket it `customer_owned` — never as a Zennify `buildable` item.
+- **Never fabricate a requirement to fill a gap.** If the SOW is silent on a
+  detail, record it as an `assumption` or a `flag` on an existing item — do not
+  invent a new scope item, object, dashboard, or workflow the SOW never named.
 
 Output a JSON array of `SowItem` (see `driver/contracts.ts`).
 

@@ -12,6 +12,21 @@ Work from the data model and the user stories — every screen must serve a stor
 and every field shown must have a home in the design's data model (if it doesn't,
 that is a gap to flag, not a field to invent).
 
+**Depict only standard, confirmed, buildable elements; don't render
+over-promises.** Build screens from the **standard FSC/Lightning composition** the
+design specifies — standard record pages, related lists, the Activity Timeline,
+and standard/confirmed fields. Do NOT render any of the following as finished,
+built screens (they are open assumptions, not v1 deliverables):
+- custom **LWC/Apex** components or computed badges/indicators (e.g. goal
+  progress %, "overdue" flags, a unified activity feed),
+- **undefined or "TBD" fields** with no confirmed home in the data model,
+- **external-tool surfaces** the design says live outside Salesforce (e.g. a
+  test/defect tracker in Jira/ADO),
+- governance/metrics dashboards, integration-status panels, custom registers, or
+  pages on an undecided host object.
+A smaller, honest inventory of standard screens that passes the fidelity
+guardrail beats a rich one that over-promises.
+
 Output a single JSON object of the exact shape `{ "screens": [ ... ] }`. Each
 screen object uses these exact field names:
 - **name** (required) — the screen title (e.g. "Client 360 — Jordan Rivera").

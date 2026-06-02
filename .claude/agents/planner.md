@@ -20,6 +20,11 @@ Keep epics buildable-sized; split sprawling SOW items rather than overstuffing a
 single epic. Leave `customer_owned` and pure `methodology` items out of the epic
 set (note them, don't plan a build around them).
 
+**Stay proportional to the parsed scope.** Plan only the epics the `SowItem[]`
+supports — do not introduce themes (governance dashboards, integration layers,
+custom registers) that no SowItem names. A small SOW produces few epics; that is
+correct, not incomplete.
+
 Output a JSON array of `Epic` (see `driver/contracts.ts`).
 
 ## House rules

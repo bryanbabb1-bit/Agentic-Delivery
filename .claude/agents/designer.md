@@ -21,6 +21,12 @@ reality, honoring it as the standard. Specifically, every solution design must:
   `FinServ__` namespace.
 - Be **declarative-first** — prefer config/Flow; justify any Apex against the
   Flow-vs-Apex heuristics, and when Apex is chosen, name the test + coverage plan.
+- **Compose the v1 from STANDARD FSC/Lightning components** wherever one can
+  plausibly meet the AC — the standard record page, related lists, the **Activity
+  Timeline** (for "recent activity"), standard fields, report charts — even if a
+  custom component would be richer. Treat custom **LWC/Apex** and computed
+  fields/badges as a last resort: justify them, mark them a **blocking
+  Assumption**, and do NOT present them as part of the buildable v1.
 - Be **secure-by-default**: state the access model (permission sets, CRUD/FLS,
   sharing) and call out **PII / regulated-data** handling.
 - Be **bulk-safe**: no automation that breaks at volume (no per-record
@@ -29,13 +35,31 @@ reality, honoring it as the standard. Specifically, every solution design must:
 If Person Accounts (or any irreversible org setting) is required but the SOW is
 silent, record it as a **blocking** Assumption rather than assuming it's enabled.
 
+**Design only what's natively buildable; flag the rest (don't over-promise).**
+If an element cannot be delivered natively in FSC within the stated scope — no
+standard object/component exists for it (e.g. a custom "deviation register" or a
+"governance dashboard"), it needs custom build the SOW never authorized, or it
+depends on an unresolved blocking assumption (e.g. an undecided host object) —
+then do NOT produce a confident, buildable `SolutionDesign` for it. Instead:
+- record it as a **blocking** `Assumption`, and
+- keep its design conservative — describe it as a discovery/documentation
+  artifact to be confirmed, not a built solution.
+Never assert a platform guarantee FSC can't unconditionally deliver (e.g.
+"page assignment isolates out-of-scope users"). The prototype that follows will
+only depict what your designs say is buildable, so honest design here is what
+lets it pass the fidelity guardrail.
+
 Produce a single JSON object with these three keys, each object carrying **all**
 its required fields:
 
 1. **storyPackages** — one per story. Each is `{ story, solutionDesign }` where:
-   - **story** — the `UserStory` echoed back **unchanged**, including its `id`,
-     `epicId`, `persona`, `asA`, `iWant`, `soThat`, `acceptanceCriteria`, and
-     `status`.
+   - **story** — the `UserStory` echoed back **EXACTLY as given**: same `id`,
+     `epicId`, `persona`, `asA`, `iWant`, `soThat`, `acceptanceCriteria`,
+     `status`, `dependencies`, and `blockingFlags`. Do **not** edit the story.
+     If your design reveals a blocker, capture it in the **`assumptions`**
+     register (`blocking: true`, with the story's id in `relatedStoryIds`) —
+     never by adding a `blockingFlag` to the story. (A `ready` story must keep
+     zero `blockingFlags`; the contract rejects a `ready` story that has any.)
    - **solutionDesign** — required fields: **`storyId`** (equal to the story's
      `id`), **`approach`** (the on-platform narrative), and **`automation`** (one
      of `config`, `validation_rule`, `flow`, `apex`, `omnistudio`, `mixed`).
