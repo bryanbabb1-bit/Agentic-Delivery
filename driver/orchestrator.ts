@@ -2,14 +2,17 @@
  * orchestrator.ts — the deterministic shell.
  *
  * Plain code, no model in the loop. For each stage the driver: (1) invokes the
- * subagent, (2) validates the agent's output against its contract schema — a
- * failed parse HALTS the pipeline at that seam instead of corrupting downstream
- * work — and (3) runs the stage's gate. Humans sit at the two irreversible
- * decision points (architect + handoff) and at the fidelity confirm.
+ * subagent (via the injected runner), (2) validates the agent's output against
+ * its contract schema — a failed parse HALTS the pipeline at that seam instead
+ * of corrupting downstream work — and (3) runs the stage's gate. Humans sit at
+ * the two irreversible decision points (architect + handoff) and at the
+ * fidelity confirm.
  *
- * The ONLY place a live model runs is `invokeSubagent`, isolated behind one
- * function so the moving Agent SDK surface is quarantined (ARCHITECTURE.md §2).
- * Everything around it is real and typechecks against the contracts.
+ * The three impure seams — the live model, the discovery loop, and the human
+ * gates — are injected (see runner.ts). Production defaults pause/throw until
+ * wired; tests inject deterministic implementations so the whole pipeline runs
+ * end to end with no model and no org. Everything else here is real and
+ * typechecks against the contracts.
  */
 import { z } from "zod";
 import {
@@ -22,6 +25,7 @@ import {
   QaResult,
   HandoffPackage,
   GateResult,
+  Mockup,
   DeliverablePackage,
 } from "./contracts.js";
 import { V1, V2, Assumption, type AssumptionVerdict } from "./v1-reconcile.js";
@@ -34,6 +38,7 @@ import {
   evaluateDeployTestGate,
   evaluateFidelityGate,
 } from "../gates/gate-lib.js";
+import { defaultDeps, type PipelineDeps } from "./runner.js";
 
 /* --------------------------------------------------------------- gate plumbing */
 
@@ -58,22 +63,6 @@ export class GateBlocked extends Error {
   }
 }
 
-/* ------------------------------------------------------------------ subagent IO */
-
-/**
- * The single seam to the live model. Stubbed for the scaffold.
- *
- * TODO(sdk): wire @anthropic-ai/claude-agent-sdk here — load the subagent named
- * `agent` from .claude/agents/<agent>.md, run it with `input` serialized as the
- * prompt, and return the parsed JSON it emits. Verify the SDK signature against
- * current docs before relying on it (SDK ~0.2.x is moving).
- */
-async function invokeSubagent(agent: string, _input: unknown): Promise<unknown> {
-  throw new Error(
-    `invokeSubagent('${agent}') is not wired yet — connect the Agent SDK in driver/orchestrator.ts.`,
-  );
-}
-
 /* ----------------------------------------------------------------- stage runner */
 
 interface Stage<S extends z.ZodTypeAny> {
@@ -92,10 +81,14 @@ interface Stage<S extends z.ZodTypeAny> {
  * (output) type flows through — note zod `.default()` fields are optional on a
  * schema's input but required on its output.
  */
-async function runStage<S extends z.ZodTypeAny>(stage: Stage<S>, input: unknown): Promise<Out<S>> {
+async function runStage<S extends z.ZodTypeAny>(
+  stage: Stage<S>,
+  input: unknown,
+  deps: PipelineDeps,
+): Promise<Out<S>> {
   stage.inputSchema.parse(input); // inbound seam check
 
-  const raw = await invokeSubagent(stage.agent, input);
+  const raw = await deps.runner.run(stage.agent, input);
 
   const parsed = stage.outputSchema.safeParse(raw);
   if (!parsed.success) throw new ContractViolation(stage.name, parsed.error);
@@ -104,30 +97,46 @@ async function runStage<S extends z.ZodTypeAny>(stage: Stage<S>, input: unknown)
   if (stage.gate) {
     const result = await stage.gate(output);
     if (!result.passed) throw new GateBlocked(result);
-    if (result.requiresHuman) await awaitHumanApproval(result);
+    if (result.requiresHuman) await deps.humanGate.approve(result);
   }
 
   return output;
 }
 
-/**
- * Human-gate pause. In headless runs this is where the driver parks the job and
- * waits for an out-of-band approval (architect / handoff sign-off, fidelity
- * confirm). Stubbed: the scaffold treats a reached human gate as a clean pause
- * point rather than auto-approving.
- *
- * TODO(human-gate): persist state and surface the artifact for review; resume on
- * the recorded verdict.
- */
-async function awaitHumanApproval(gate: GateResult): Promise<void> {
-  throw new Error(
-    `Human gate '${gate.gate}' reached — driver paused for sign-off (wire the review/resume loop here).`,
-  );
-}
+/* ----------------------------------------- prototype-stage shapes (loose contracts) */
+
+const ScreenInventory = z.object({
+  screens: z.array(
+    z.object({
+      name: z.string(),
+      storyIds: z.array(z.string()).default([]),
+      objects: z.array(z.string()).default([]),
+      interactions: z.array(z.string()).default([]),
+    }),
+  ),
+});
+
+// proto-fidelity emits { passes, violations[] }; only `passes` is needed at the seam.
+const FidelityReport = z.object({
+  passes: z.boolean(),
+  violations: z
+    .array(z.object({ element: z.string(), reason: z.string(), severity: z.string() }))
+    .default([]),
+});
+
+const Walkthrough = z.object({ scriptPath: z.string() });
+
+// designer emits the story packages, cross-cutting design notes, and the
+// assumption register that seeds discovery.
+const DesignerOutput = z.object({
+  storyPackages: z.array(StoryPackage),
+  epicDesigns: z.array(DesignNote),
+  assumptions: z.array(Assumption),
+});
 
 /* ---------------------------------------------------------------------- gates */
 
-const fidelityGate: Gate<{ passes: boolean }> = (report) =>
+const fidelityGate: Gate<z.infer<typeof FidelityReport>> = (report) =>
   GateResult.parse(evaluateFidelityGate(report as Record<string, unknown>));
 
 const architectGate: Gate<V2> = (v2) =>
@@ -152,17 +161,6 @@ const handoffGate: Gate<HandoffPackage> = (pkg) =>
     requiresHuman: true,
   });
 
-/* ------------------------------------------------------- a minimal fidelity shape */
-
-// proto-fidelity emits { passes, violations[] }; only `passes` is needed at the seam.
-const FidelityReport = z.object({
-  passes: z.boolean(),
-  violations: z
-    .array(z.object({ element: z.string(), reason: z.string(), severity: z.string() }))
-    .default([]),
-});
-type FidelityReport = z.infer<typeof FidelityReport>;
-
 /* ----------------------------------------------------------------- the pipeline */
 
 export interface RunInput {
@@ -179,23 +177,31 @@ export interface RunResult {
 /**
  * Drive a signed SOW to a client-ready handoff package, per the §1 flow:
  *
- *   parse → plan → stories → design ──► (prototype: layout → build → fidelity*)
- *        └─► DISCOVERY (human loop) → reconcile* → build → qa → handoff*
+ *   parse → plan → stories → design
+ *        → (prototype: layout → build → fidelity* → walkthrough)
+ *        → DISCOVERY (human loop) → reconcile* → build → qa* → handoff*
  *
  * (* = gated). Stages are sequenced and seam-checked here; the actual agent work
- * happens behind `invokeSubagent`. The discovery loop iterates Sprint-0 style
+ * happens behind the injected runner. The discovery loop iterates Sprint-0 style
  * until no blocking assumption remains.
  */
-export async function run(input: RunInput): Promise<RunResult> {
+export async function run(
+  input: RunInput,
+  depsOverride: Partial<PipelineDeps> = {},
+): Promise<RunResult> {
+  const deps: PipelineDeps = { ...defaultDeps(), ...depsOverride };
+
   // ---- Plan ----------------------------------------------------------------
   const sowItems = await runStage(
     { name: "parse", agent: "parser", inputSchema: z.string(), outputSchema: z.array(SowItem) },
     input.sowText,
+    deps,
   );
 
   const epics = await runStage(
     { name: "plan", agent: "planner", inputSchema: z.array(SowItem), outputSchema: z.array(Epic) },
     sowItems,
+    deps,
   );
 
   const stories: UserStory[] = [];
@@ -203,27 +209,32 @@ export async function run(input: RunInput): Promise<RunResult> {
     const epicStories = await runStage(
       { name: "stories", agent: "story-writer", inputSchema: Epic, outputSchema: z.array(UserStory) },
       epic,
+      deps,
     );
     stories.push(...epicStories);
   }
 
-  // designer emits the story packages, cross-cutting design notes, and the
-  // assumption register that seeds discovery.
-  const DesignerOutput = z.object({
-    storyPackages: z.array(StoryPackage),
-    epicDesigns: z.array(DesignNote),
-    assumptions: z.array(Assumption),
-  });
   const design = await runStage(
     { name: "design", agent: "designer", inputSchema: z.array(UserStory), outputSchema: DesignerOutput },
     stories,
+    deps,
   );
 
   // ---- Prototype sub-pipeline ---------------------------------------------
-  // layout → build → fidelity (gated) → walkthrough. The prototype's mockups and
-  // assumption panel are the v0 strawman the client reacts to in discovery.
-  // (Agent invocations run behind invokeSubagent; output shapes elided in the
-  // scaffold beyond what the fidelity gate needs.)
+  // layout → build → fidelity (gated) → walkthrough. The mockups + assumption
+  // panel are the v0 strawman the client reacts to in discovery.
+  const inventory = await runStage(
+    { name: "layout", agent: "proto-layout", inputSchema: z.unknown(), outputSchema: ScreenInventory },
+    { designNotes: design.epicDesigns, stories },
+    deps,
+  );
+
+  const mockups = await runStage(
+    { name: "prototype", agent: "proto-build", inputSchema: ScreenInventory, outputSchema: z.array(Mockup) },
+    inventory,
+    deps,
+  );
+
   await runStage(
     {
       name: "fidelity",
@@ -232,8 +243,18 @@ export async function run(input: RunInput): Promise<RunResult> {
       outputSchema: FidelityReport,
       gate: fidelityGate,
     },
-    {},
+    { mockups, designNotes: design.epicDesigns },
+    deps,
   );
+
+  await runStage(
+    { name: "walkthrough", agent: "proto-walkthrough", inputSchema: z.unknown(), outputSchema: Walkthrough },
+    { mockups, assumptions: design.assumptions },
+    deps,
+  );
+
+  // Fidelity passed → stamp the mockups.
+  const fidelityPassedMockups = mockups.map((m) => ({ ...m, fidelityPassed: true }));
 
   let deliverable: DeliverablePackage = DeliverablePackage.parse({
     sowRef: input.sowRef,
@@ -241,7 +262,7 @@ export async function run(input: RunInput): Promise<RunResult> {
     epics,
     storyPackages: design.storyPackages,
     epicDesigns: design.epicDesigns,
-    mockups: [],
+    mockups: fidelityPassedMockups,
     assumptionRegisterRef: `${input.sowRef}::assumptions`,
     status: "v0_strawman",
   });
@@ -250,7 +271,7 @@ export async function run(input: RunInput): Promise<RunResult> {
   let assumptions: Assumption[] = design.assumptions;
   do {
     const agenda = buildAssumptionAgenda(deliverable, assumptions);
-    const verdicts: AssumptionVerdict[] = await collectDiscoveryVerdicts(agenda);
+    const verdicts: AssumptionVerdict[] = await deps.discovery.collectVerdicts(agenda);
     assumptions = applyVerdicts(assumptions, verdicts);
     deliverable = { ...deliverable, status: "in_discovery" };
   } while (blockingAssumptionsRemain(assumptions));
@@ -260,6 +281,7 @@ export async function run(input: RunInput): Promise<RunResult> {
   const reconciled = await runStage(
     { name: "reconcile", agent: "reconciler", inputSchema: V1, outputSchema: V2, gate: architectGate },
     v1,
+    deps,
   );
   deliverable = reconciled.base;
 
@@ -269,6 +291,7 @@ export async function run(input: RunInput): Promise<RunResult> {
     const build = await runStage(
       { name: "build", agent: "builder", inputSchema: DesignNote, outputSchema: BuildResult },
       designNote,
+      deps,
     );
     builds.push(build);
   }
@@ -278,10 +301,12 @@ export async function run(input: RunInput): Promise<RunResult> {
     const qa = await runStage(
       { name: "qa", agent: "qa", inputSchema: BuildResult, outputSchema: QaResult, gate: deployTestGate },
       build,
+      deps,
     );
     lastHandoff = await runStage(
       { name: "handoff", agent: "handoff", inputSchema: QaResult, outputSchema: HandoffPackage, gate: handoffGate },
       qa,
+      deps,
     );
   }
 
@@ -290,19 +315,4 @@ export async function run(input: RunInput): Promise<RunResult> {
   }
 
   return { deliverable, reconciled, handoff: lastHandoff };
-}
-
-/**
- * Discovery is a human + client loop, not an agent. In a headless run the driver
- * emits the agenda and parks until verdicts come back through the intake surface.
- *
- * TODO(discovery): surface the agenda + prototype to the client and collect
- * AssumptionVerdict[]; resume here.
- */
-async function collectDiscoveryVerdicts(
-  agenda: ReturnType<typeof buildAssumptionAgenda>,
-): Promise<AssumptionVerdict[]> {
-  throw new Error(
-    `Discovery loop reached for ${agenda.sowRef} (${agenda.blockingCount} blocking) — wire the client confirm/correct surface here.`,
-  );
 }

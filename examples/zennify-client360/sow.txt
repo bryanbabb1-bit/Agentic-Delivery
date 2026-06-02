@@ -1,0 +1,18 @@
+STATEMENT OF WORK (excerpt) — Zennify SBH, Financial Services Cloud
+
+Scope: Client 360.
+
+Advisors at the bank currently hunt across multiple tabs to assemble a picture of
+a retail client. This engagement delivers a unified "Client 360" profile in
+Financial Services Cloud: a single Person Account page that surfaces the client's
+financial accounts, financial goals, and recent activity together.
+
+In scope (Zennify build): the Client 360 Lightning profile, the supporting page
+layout and components, and SIT against a sandbox.
+
+Out of scope / customer-owned: any real-time core-banking integration for the
+activity feed. The data model for retail clients is assumed to follow FSC
+defaults.
+
+Deliverables: up to 2 sandboxes, a Jira story export, and SIT results. The
+package is delivered UAT-ready for customer-led testing.

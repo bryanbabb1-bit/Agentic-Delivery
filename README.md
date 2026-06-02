@@ -30,17 +30,32 @@ SOW in, package out — compiler, not copilot.
 | `driver/contracts.ts` | The typed contract layer — every handoff is one of these schemas. |
 | `driver/v1-reconcile.ts` | Assumption register + post-discovery diff (V1/V2). |
 | `driver/discovery.ts` | The human discovery-loop helpers. |
+| `driver/runner.ts` | The injectable seams: subagent runner, discovery, human gates (prod defaults + fixture impls). |
 | `driver/orchestrator.ts` | The deterministic shell: stage sequencing, validation, gate wiring. |
+| `examples/zennify-client360/` | A worked SOW driven end to end with fixtures (no model, no org). |
 | `gates/` | The hook scripts (`deploy-test-gate.js`, `fidelity-gate.js`) + shared `gate-lib.js`. |
 | `prototypes/` | Generated HTML/SLDS mockup sets (git-ignored). |
 
-## Status: scaffold
+## Status: Phase 1 runnable
 
-The structure, contracts, agents, skills, gates, and the typed driver skeleton
-are all in place and typecheck against the contracts. **The one stub** is the
-live model seam: `invokeSubagent` in `driver/orchestrator.ts` (and the
-discovery/human-gate resume loops). Wire the Agent SDK there — verify the
-signature against current docs (SDK ~0.2.x and the DX MCP Beta are both moving).
+The structure, contracts, agents, skills, gates, and the deterministic driver are
+all in place and typecheck against the contracts. The pipeline **runs end to end
+today** — the whole Phase-1 flow (parse → plan → stories → design → prototype →
+discovery → reconcile → build → qa → handoff) executes against fixtures, with
+every contract validated and every gate enforced.
+
+The three impure points — the live model, the discovery loop, the human gates —
+are **injected** (`driver/runner.ts`). The production defaults (`SdkRunner`,
+`PausingDiscovery`, `PausingHumanGate`) pause/throw until wired; the worked
+example injects deterministic implementations. **The one thing left to wire** is
+`SdkRunner.run` (the Agent SDK call) — verify its signature against current docs
+(SDK ~0.2.x and the DX MCP Beta are both moving; note the zod peer).
+
+### Run the worked example
+
+```bash
+npm run example     # drives examples/zennify-client360 SOW → reconciled package
+```
 
 ## Develop
 
