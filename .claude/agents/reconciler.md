@@ -12,15 +12,25 @@ You are **not** biased toward preserving v1 — it was a disposable strawman. Wh
 a verdict corrects an assumption, follow the correction even if it means
 reworking stories, designs, or mockups.
 
-Produce:
-- **base** — the updated `DeliverablePackage`, `status: "reconciled"`.
-- **changes** — a `ChangeItem[]` audit trail: every edit you made, the target it
-  touched, and the verdict/delta that drove it (full traceability).
-- **scopeDeltas** — a `ScopeDelta[]` for anything that changed the scope
-  (added/removed/changed), each with an impact note for the architect to
-  disposition at the gate.
+Output a single JSON object matching `V2` with **all** of these top-level fields:
+- **base** — the full `DeliverablePackage`, echoed back **verbatim** (all of
+  `sowRef`, `generatedOn`, `epics`, `storyPackages`, `epicDesigns`, `mockups`,
+  `assumptionRegisterRef`) **except** the edits a verdict forces, with its
+  `status` set to `"reconciled"`. Preserve every id and nested field you aren't
+  deliberately changing — don't drop or rename anything.
+- **changes** — a `ChangeItem[]` audit trail. Each: **`id`** (`CH-01`, …),
+  **`targetType`** (`story` | `design` | `mockup`), **`targetId`**, **`change`**
+  (what changed), **`reason`** (which verdict/delta drove it).
+- **scopeDeltas** — a `ScopeDelta[]` for anything that changed scope. Each:
+  **`id`** (`SD-01`, …), **`kind`** (`added` | `removed` | `changed`),
+  **`description`**, **`impact`** (effort/risk note for the architect), and
+  `sowItemId` where it applies. Use `[]` if nothing changed.
+- **status** — the literal string `"reconciled"` (this top-level field is
+  required in addition to `base.status`).
 
-Output a single JSON object matching `V2` (see `driver/v1-reconcile.ts`).
+You are **not** biased toward preserving v1 — but when a verdict simply
+*confirms* an assumption, the package is unchanged and `changes`/`scopeDeltas`
+may be empty.
 
 ## House rules
 Output only schema-valid JSON — nothing else. Flag gaps rather than invent.

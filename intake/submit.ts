@@ -11,7 +11,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { run, runPlanPhase } from "../driver/orchestrator.js";
-import { AutoConfirmDiscovery, AutoApproveHumanGate } from "../driver/runner.js";
+import {
+  AutoConfirmDiscovery,
+  AutoApproveHumanGate,
+  SdkRunner,
+} from "../driver/runner.js";
 
 const HELP = `sow-to-ship intake — submit a SOW, receive a deliverable package.
 
@@ -64,9 +68,12 @@ async function main(): Promise<void> {
   const sowText = await readFile(args.sowFile, "utf8");
   const sowRef = args.ref ?? basename(args.sowFile).replace(/\.[^.]+$/, "");
 
-  const deps = args.auto
+  const deps: Record<string, unknown> = args.auto
     ? { discovery: new AutoConfirmDiscovery(), humanGate: new AutoApproveHumanGate() }
     : {};
+  // The front half needs no Salesforce org, so run it with MCP disabled — the
+  // designer grounds from the SOW + fsc-patterns skill instead of a live org.
+  if (args.planOnly) deps.runner = new SdkRunner({ disableMcp: true });
   const result = args.planOnly
     ? await runPlanPhase({ sowRef, sowText }, deps)
     : await run({ sowRef, sowText }, deps);

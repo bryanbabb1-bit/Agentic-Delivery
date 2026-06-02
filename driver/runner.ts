@@ -46,6 +46,14 @@ export interface SdkRunnerOptions {
   mcpConfigPath?: string;
   /** Working directory for the Agent SDK process. */
   cwd?: string;
+  /**
+   * No-org mode: don't wire MCP servers. The front half (plan → … → reconcile)
+   * needs no Salesforce org (ARCHITECTURE.md §8). With this set, an agent whose
+   * only tools are MCP servers (e.g. the designer's read-only DX grounding) runs
+   * single-shot instead of trying to spawn an unauthenticated MCP; built-in
+   * tools (e.g. proto-walkthrough's `Write`) are unaffected.
+   */
+  disableMcp?: boolean;
 }
 
 /** Turns let a tool-using agent call tools and respond; plan agents are single-shot. */
@@ -81,17 +89,21 @@ export class SdkRunner implements SubagentRunner {
     const def = await loadAgent(agent, this.opts.agentsDir);
     const { query } = await import("@anthropic-ai/claude-agent-sdk");
 
-    const usesTools = def.tools.length > 0;
     const builtinTools = def.tools.filter((t) => !t.startsWith("mcp__"));
-    const mcpServers = usesTools ? await this.selectMcpServers(def.tools) : undefined;
+    const wantsMcp = def.tools.some((t) => t.startsWith("mcp__"));
+    // No-org mode drops MCP grants; an agent left with no usable tools runs single-shot.
+    const effectiveTools = this.opts.disableMcp ? builtinTools : def.tools;
+    const usesTools = effectiveTools.length > 0;
+    const mcpServers =
+      wantsMcp && !this.opts.disableMcp ? await this.selectMcpServers(def.tools) : undefined;
 
     const q = query({
       prompt: buildUserPrompt(input),
       options: {
         ...(def.model ? { model: def.model } : {}),
         systemPrompt: def.systemPrompt,
-        tools: builtinTools, // [] for plan agents; e.g. ['Write'] for handoff
-        ...(usesTools ? { allowedTools: def.tools } : {}), // auto-allow, no prompts
+        tools: builtinTools, // [] for plan agents; e.g. ['Write'] for proto-walkthrough
+        ...(usesTools ? { allowedTools: effectiveTools } : {}), // auto-allow, no prompts
         ...(mcpServers && Object.keys(mcpServers).length ? { mcpServers } : {}),
         settingSources: [], // isolation: don't load project settings/hooks here
         maxTurns: usesTools ? TOOL_AGENT_MAX_TURNS : 1,

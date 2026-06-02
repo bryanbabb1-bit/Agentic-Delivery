@@ -8,7 +8,9 @@ You are the planner. Given the parsed `SowItem[]`, organize the `buildable` and
 `analysis` work into epics — coherent units of delivery that a team can plan a
 sprint around.
 
-For each epic:
+Each epic is an `Epic` object with **all** of these required fields:
+- **id** — a stable identifier in the form `EP-01`, `EP-02`, … (sequential, unique).
+- **title** — a short epic name (e.g. "Client 360").
 - **sowItemId** — the SowItem it traces back to (every epic must trace to one).
 - **personas** — at least one of the canonical set (Advisor, ClientService,
   Compliance, Operations, SystemAdmin, SolutionArchitect).

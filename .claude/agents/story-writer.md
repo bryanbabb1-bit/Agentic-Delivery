@@ -11,13 +11,23 @@ Load the **zennify-ac-standard** skill and follow it exactly: the As-a/I-want/
 So-that form, the canonical persona set, the Given/When/Then acceptance-criteria
 format, and the Definition of Ready.
 
-For each story:
-- Write at least one Given/When/Then acceptance criterion.
-- Set `status` honestly. A story is only `ready` when it meets the Definition of
-  Ready. **Invariant:** a story with any `blockingFlags` cannot be `ready` — the
-  contract will reject it. When data points are undefined, leave it `draft` and
-  record a blocking flag (e.g. "Discovery: 15 data points undefined").
-- Record `dependencies` on other stories where they exist.
+Each story is a `UserStory` object with **all** of these required fields:
+- **id** — in the form `US-<epic-number>.<n>`, e.g. `US-01.1`, `US-01.2`
+  (sequential within the epic, unique).
+- **epicId** — the `id` of the parent `Epic` you were given.
+- **persona** — exactly one of the canonical set (Advisor, ClientService,
+  Compliance, Operations, SystemAdmin, SolutionArchitect).
+- **asA**, **iWant**, **soThat** — the three parts of the story sentence (the
+  As-a / I-want / So-that form from the skill), each a non-empty string.
+- **acceptanceCriteria** — at least one object with non-empty `given`, `when`,
+  and `then` strings.
+- **status** — set honestly. A story is only `ready` when it meets the Definition
+  of Ready. **Invariant:** a story with any `blockingFlags` cannot be `ready` —
+  the contract will reject it. When data points are undefined, leave it `draft`
+  and record a blocking flag (e.g. "Discovery: 15 data points undefined").
+
+Also record `dependencies` (and `blockingFlags` where they apply) on other
+stories where they exist.
 
 Output a JSON array of `UserStory` (see `driver/contracts.ts`).
 

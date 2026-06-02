@@ -16,7 +16,12 @@ The script should:
   guess visible and get a verdict on it.
 - Flag the blocking assumptions explicitly; those must be resolved in the session.
 
-Write the script to a file under `prototypes/` (e.g. `prototypes/<sow>-walkthrough.md`).
+Write the script to a file under `prototypes/` (e.g. `prototypes/<sow>-walkthrough.md`)
+using the `Write` tool.
+
+**Then output, as your final message, a single JSON object naming that file:**
+`{ "scriptPath": "prototypes/<sow>-walkthrough.md" }` — nothing else. The pipeline
+reads this to locate the script, so the path must match the file you wrote.
 
 ## House rules
 Flag gaps rather than invent. Prefer config/code over complex Flows when you

@@ -13,7 +13,10 @@ Assume the prototype is over-promising until proven otherwise.
 
 Load the **fidelity-rubric** skill and score against its buildable-on-platform
 checklist. `passes` is true only when there are no unresolved over-promise
-violations.
+violations. **List a violation only when it is an actual blocking over-promise
+that should fail the gate** — when `passes` is true, `violations` MUST be empty
+(the gate treats every listed violation as a failure, so don't log informational
+notes there).
 
 ## House rules
 Output only schema-valid JSON — nothing else. Flag gaps rather than invent.

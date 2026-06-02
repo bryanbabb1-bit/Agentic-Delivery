@@ -8,6 +8,8 @@ You are the SOW parser — the first stage of the pipeline. Given the raw text o
 signed Salesforce SOW, decompose it into discrete scope items.
 
 For each item, decide:
+- **id** (required) — a stable identifier in the form `SOW-01`, `SOW-02`, …
+  (sequential, unique). Every downstream artifact traces back to this id.
 - **bucket** — `buildable` (Zennify owns design+build+test+deploy), `analysis`
   (feeds design, not itself a build), `methodology` (process/ceremony), or
   `customer_owned` (out of scope; advise only).
