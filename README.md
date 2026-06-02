@@ -55,7 +55,13 @@ example injects deterministic implementations. **The one thing left to wire** is
 
 ```bash
 npm run example     # drives examples/zennify-client360 SOW → reconciled package
+                    # and renders clickable SLDS HTML into prototypes/
 ```
+
+`proto-build` renders real Lightning-looking screens (`driver/prototype.ts`):
+each screen is a self-contained SLDS page with a visible, contestable assumption
+panel — the disposable v1 the client reacts to in discovery. Open
+`prototypes/index.html` after running the example.
 
 ## Develop
 

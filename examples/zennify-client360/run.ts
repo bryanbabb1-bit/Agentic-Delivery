@@ -14,15 +14,24 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { run } from "../../driver/orchestrator.js";
 import { FixtureRunner, AutoConfirmDiscovery, AutoApproveHumanGate } from "../../driver/runner.js";
-import { fixtures } from "./fixtures.js";
+import { makeFixtures } from "./fixtures.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(here, "..", "..");
+const sowRef = "ZEN-SBH-CLIENT360";
 
 async function main(): Promise<void> {
   const sowText = await readFile(join(here, "sow.txt"), "utf8");
 
+  // writePrototypes: true → proto-build renders real SLDS HTML into prototypes/.
+  const fixtures = makeFixtures({
+    sowRef,
+    writePrototypes: true,
+    outDir: join(repoRoot, "prototypes"),
+  });
+
   const result = await run(
-    { sowRef: "ZEN-SBH-CLIENT360", sowText },
+    { sowRef, sowText },
     {
       runner: new FixtureRunner(fixtures),
       discovery: new AutoConfirmDiscovery(),
@@ -37,6 +46,7 @@ async function main(): Promise<void> {
   console.log(`Mockups        : ${result.deliverable.mockups.length} (fidelity passed: ${result.deliverable.mockups.every((m) => m.fidelityPassed)})`);
   console.log(`Reconcile diff : ${result.reconciled.changes.length} change(s), ${result.reconciled.scopeDeltas.length} scope delta(s)`);
   console.log(`Handoff        : UAT-ready, ${result.handoff.knownBoundaries.length} known boundary(ies)`);
+  console.log(`Prototype HTML : ${result.deliverable.mockups.map((m) => m.path).join(", ")}`);
   console.log("\n--- DeliverablePackage ---\n");
   console.log(JSON.stringify(result.deliverable, null, 2));
 }

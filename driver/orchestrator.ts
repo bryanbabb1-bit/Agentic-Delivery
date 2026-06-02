@@ -111,6 +111,7 @@ const ScreenInventory = z.object({
       name: z.string(),
       storyIds: z.array(z.string()).default([]),
       objects: z.array(z.string()).default([]),
+      fields: z.array(z.string()).default([]),
       interactions: z.array(z.string()).default([]),
     }),
   ),
