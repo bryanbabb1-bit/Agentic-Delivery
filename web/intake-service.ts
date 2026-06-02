@@ -52,9 +52,9 @@ export interface IntakeResult {
 }
 
 /** Demo dependencies: recorded fixtures + auto discovery/approval. */
-function demoDeps(sowRef: string, outDir: string): PipelineDeps {
+function demoDeps(): PipelineDeps {
   return {
-    runner: new FixtureRunner(makeFixtures({ sowRef, writePrototypes: true, outDir })),
+    runner: new FixtureRunner(makeFixtures()),
     discovery: new AutoConfirmDiscovery(),
     humanGate: new AutoApproveHumanGate(),
   };
@@ -82,12 +82,12 @@ export async function runIntake(req: IntakeRequest): Promise<IntakeResult> {
   const live = isLiveMode();
 
   const result = await run(
-    { sowRef, sowText: req.sowText },
-    live ? liveDeps(process.cwd()) : demoDeps(sowRef, outDir),
+    { sowRef, sowText: req.sowText, prototypeOut: { dir: outDir } },
+    live ? liveDeps(process.cwd()) : demoDeps(),
   );
 
-  // Demo mode writes prototype HTML to outDir; live mode doesn't yet (the
-  // proto-build agent's Write tool is Phase 2), so tolerate a missing dir.
+  // The driver renders prototypes into outDir in both demo and live mode;
+  // tolerate a missing dir defensively.
   const htmlFiles = await readdir(outDir).catch(() => [] as string[]);
   const prototypes: PrototypeRef[] = htmlFiles
     .filter((f) => f.endsWith(".html"))

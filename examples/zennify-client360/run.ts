@@ -23,17 +23,11 @@ const sowRef = "ZEN-SBH-CLIENT360";
 async function main(): Promise<void> {
   const sowText = await readFile(join(here, "sow.txt"), "utf8");
 
-  // writePrototypes: true → proto-build renders real SLDS HTML into prototypes/.
-  const fixtures = makeFixtures({
-    sowRef,
-    writePrototypes: true,
-    outDir: join(repoRoot, "prototypes"),
-  });
-
+  // The driver renders the SLDS HTML into prototypes/ (prototypeOut).
   const result = await run(
-    { sowRef, sowText },
+    { sowRef, sowText, prototypeOut: { dir: join(repoRoot, "prototypes") } },
     {
-      runner: new FixtureRunner(fixtures),
+      runner: new FixtureRunner(makeFixtures()),
       discovery: new AutoConfirmDiscovery(),
       humanGate: new AutoApproveHumanGate(),
     },

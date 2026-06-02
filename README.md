@@ -66,11 +66,14 @@ npm run intake -- examples/zennify-client360/sow.txt --auto   # CLI, unattended
 INTAKE_LIVE=1 npm run web              # web UI flips to live mode
 ```
 
-Scope today: this powers the **plan stages** (parser → … → reconciler). The
-tool-using stages (builder/qa via DX MCP, handoff via Jira, prototype
-file-writing) still need their tools/MCP granted — see `DECISIONS.md`. Without
-`--auto`/credentials the pipeline pauses at the discovery loop and human gates by
-design.
+Scope: the plan stages run live, and `SdkRunner` now **grants tool-using agents
+their tools + MCP servers** (built-ins like `Write`, and `mcp__salesforce-dx` /
+`mcp__jira` wired from `.mcp.json`). The DX MCP is how `builder`/`qa` touch a real
+scratch org so the deploy-test gate bites with real coverage. **Still untested
+end-to-end:** that needs a connected DX MCP + a target org — none in this repo's
+sandbox; never point it at production. Prototype HTML is rendered by the driver
+(not an agent), so it's identical in demo and live. Without `--auto`/credentials
+the pipeline pauses at the discovery loop and human gates by design.
 
 ## Decision log
 

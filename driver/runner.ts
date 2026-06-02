@@ -12,6 +12,7 @@ import type { AssumptionAgenda } from "./discovery.js";
 import type { AssumptionVerdict } from "./v1-reconcile.js";
 import type { GateResult } from "./contracts.js";
 import { loadAgent, buildUserPrompt, extractJson } from "./agent-loader.js";
+import { loadMcpServers, mcpServerName, type McpServerMap } from "./mcp-config.js";
 
 /* ---------------------------------------------------------------- interfaces */
 
@@ -41,23 +42,31 @@ export interface PipelineDeps {
 export interface SdkRunnerOptions {
   /** Where the subagent .md files live (defaults to .claude/agents). */
   agentsDir?: string;
+  /** Path to the MCP config (defaults to .mcp.json). */
+  mcpConfigPath?: string;
   /** Working directory for the Agent SDK process. */
   cwd?: string;
 }
 
+/** Turns let a tool-using agent call tools and respond; plan agents are single-shot. */
+const TOOL_AGENT_MAX_TURNS = 16;
+
 /**
  * The live model seam: runs each subagent via the Agent SDK
- * (`@anthropic-ai/claude-agent-sdk`). Loads the agent's `.md`, runs it single-
- * shot with built-in tools disabled and filesystem settings isolated, reads the
- * `result` message, and extracts the JSON the agent emitted.
+ * (`@anthropic-ai/claude-agent-sdk`). Loads the agent's `.md`, runs it, reads
+ * the `result` message, and extracts the JSON the agent emitted.
  *
- * SCOPE: this wires the text-in/JSON-out (plan) stages. Tool-using stages
- * (builder/qa via DX MCP, handoff via Jira, prototype file-writing) need their
- * tools + MCP granted — that's the Phase-2 follow-up (see DECISIONS.md).
+ * - **Plan stages** (no tools): single-shot, built-in tools disabled.
+ * - **Tool-using stages**: the agent's declared tools are granted — built-ins
+ *   (e.g. `Write`) via `tools`/`allowedTools`, and MCP servers (e.g.
+ *   `mcp__salesforce-dx`, `mcp__jira`) wired from `.mcp.json`. The DX MCP is how
+ *   `builder`/`qa` touch a real scratch org so the deploy-test gate bites with
+ *   real coverage (ARCHITECTURE.md §8).
  *
- * NOTE: unverified in CI/sandbox — the SDK spawns the Claude Code process and
- * needs Anthropic credentials. Validate signatures + message handling on a
- * credentialed machine before relying on it.
+ * NOTE: the tool-using path is unverified in CI/sandbox — it needs Anthropic
+ * credentials, a connected DX MCP, and a target org. Validate on a credentialed
+ * machine; never point the DX MCP at production (BuildResult.isProduction is a
+ * literal `false`).
  */
 export class SdkRunner implements SubagentRunner {
   constructor(private readonly opts: SdkRunnerOptions = {}) {}
@@ -72,14 +81,20 @@ export class SdkRunner implements SubagentRunner {
     const def = await loadAgent(agent, this.opts.agentsDir);
     const { query } = await import("@anthropic-ai/claude-agent-sdk");
 
+    const usesTools = def.tools.length > 0;
+    const builtinTools = def.tools.filter((t) => !t.startsWith("mcp__"));
+    const mcpServers = usesTools ? await this.selectMcpServers(def.tools) : undefined;
+
     const q = query({
       prompt: buildUserPrompt(input),
       options: {
         ...(def.model ? { model: def.model } : {}),
         systemPrompt: def.systemPrompt,
-        tools: [], // plan stages need no built-in tools; Phase 2 grants per-agent
+        tools: builtinTools, // [] for plan agents; e.g. ['Write'] for handoff
+        ...(usesTools ? { allowedTools: def.tools } : {}), // auto-allow, no prompts
+        ...(mcpServers && Object.keys(mcpServers).length ? { mcpServers } : {}),
         settingSources: [], // isolation: don't load project settings/hooks here
-        maxTurns: 1,
+        maxTurns: usesTools ? TOOL_AGENT_MAX_TURNS : 1,
         ...(this.opts.cwd ? { cwd: this.opts.cwd } : {}),
       },
     });
@@ -96,6 +111,14 @@ export class SdkRunner implements SubagentRunner {
       throw new Error(`agent '${agent}' returned no result message.`);
     }
     return extractJson(resultText);
+  }
+
+  /** The MCP servers an agent's `mcp__*` tool grants reference, from .mcp.json. */
+  private async selectMcpServers(tools: string[]): Promise<McpServerMap> {
+    const wanted = new Set(tools.map(mcpServerName).filter((n): n is string => Boolean(n)));
+    if (wanted.size === 0) return {};
+    const all = await loadMcpServers(this.opts.mcpConfigPath);
+    return Object.fromEntries(Object.entries(all).filter(([name]) => wanted.has(name)));
   }
 }
 

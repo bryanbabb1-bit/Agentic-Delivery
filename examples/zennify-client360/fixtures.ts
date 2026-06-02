@@ -6,9 +6,8 @@
  * internally consistent and traceable. These let the FixtureRunner drive the
  * whole Phase-1 pipeline with no live model and no Salesforce org.
  *
- * `makeFixtures({ writePrototypes })` controls whether `proto-build` actually
- * renders SLDS HTML to disk (the runnable example does; the e2e test does not,
- * so it stays a pure in-memory run).
+ * Prototype HTML is rendered by the driver (not an agent), so these fixtures
+ * only supply the structured screen inventory via `proto-layout`.
  */
 import type {
   SowItem,
@@ -19,14 +18,8 @@ import type {
 } from "../../driver/contracts.js";
 import type { Assumption, V1 } from "../../driver/v1-reconcile.js";
 import type { FixtureMap } from "../../driver/runner.js";
-import {
-  renderPrototype,
-  writePrototype,
-  slug,
-  type PrototypeScreen,
-} from "../../driver/prototype.js";
 
-/** Shared by the designer (register) and proto-build (assumption panel). */
+/** Shared by the designer register and the proto-layout assumption-bearing screens. */
 const ASSUMPTIONS: Assumption[] = [
   {
     id: "ASM-01",
@@ -46,16 +39,7 @@ const ASSUMPTIONS: Assumption[] = [
   },
 ];
 
-export interface FixtureOptions {
-  sowRef?: string;
-  writePrototypes?: boolean;
-  outDir?: string;
-}
-
-export function makeFixtures(options: FixtureOptions = {}): FixtureMap {
-  const sowRef = options.sowRef ?? "ZEN-SBH-CLIENT360";
-  const outDir = options.outDir ?? "prototypes";
-
+export function makeFixtures(): FixtureMap {
   return {
     parser: (): SowItem[] => [
       {
@@ -205,28 +189,10 @@ export function makeFixtures(options: FixtureOptions = {}): FixtureMap {
       ],
     }),
 
-    "proto-build": async (input) => {
-      const inventory = input as { screens: PrototypeScreen[] };
-
-      if (options.writePrototypes) {
-        const files = renderPrototype({ sowRef, screens: inventory.screens, assumptions: ASSUMPTIONS });
-        await writePrototype(outDir, files);
-      }
-
-      return inventory.screens.map((screen, i) => ({
-        id: `MOCK-${String(i + 1).padStart(2, "0")}`,
-        title: screen.name,
-        path: `${outDir}/${slug(screen.name)}.html`,
-        relatedStoryIds: screen.storyIds,
-        screens: [screen.name],
-        fidelityPassed: false,
-      }));
-    },
-
     "proto-fidelity": () => ({ passes: true, violations: [] }),
 
     "proto-walkthrough": () => ({
-      scriptPath: `${outDir}/zennify-client360-walkthrough.md`,
+      scriptPath: "prototypes/zennify-client360-walkthrough.md",
     }),
 
     reconciler: (input) => {

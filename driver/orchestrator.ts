@@ -39,6 +39,7 @@ import {
   evaluateFidelityGate,
 } from "../gates/gate-lib.js";
 import { defaultDeps, type PipelineDeps } from "./runner.js";
+import { renderPrototype, writePrototype, slug } from "./prototype.js";
 
 /* --------------------------------------------------------------- gate plumbing */
 
@@ -179,6 +180,8 @@ const handoffGate: Gate<HandoffPackage> = (pkg) =>
 export interface RunInput {
   sowRef: string;
   sowText: string;
+  /** When set, the driver renders the prototype HTML into this directory. */
+  prototypeOut?: { dir: string };
 }
 
 export interface RunResult {
@@ -236,18 +239,36 @@ export async function run(
   );
 
   // ---- Prototype sub-pipeline ---------------------------------------------
-  // layout → build → fidelity (gated) → walkthrough. The mockups + assumption
-  // panel are the v0 strawman the client reacts to in discovery.
+  // layout (agent → structured inventory) → DRIVER renders HTML deterministically
+  // → fidelity (gated) → walkthrough. Rendering lives in the driver, not an LLM:
+  // models are reliable at structure and brittle at pixels, and this makes the
+  // prototype identical in demo and live runs. The mockups + assumption panel are
+  // the v0 strawman the client reacts to in discovery.
   const inventory = await runStage(
     { name: "layout", agent: "proto-layout", inputSchema: z.unknown(), outputSchema: ScreenInventory },
     { designNotes: design.epicDesigns, stories },
     deps,
   );
 
-  const mockups = await runStage(
-    { name: "prototype", agent: "proto-build", inputSchema: ScreenInventory, outputSchema: z.array(Mockup) },
-    inventory,
-    deps,
+  const protoDir = input.prototypeOut?.dir;
+  if (protoDir) {
+    const files = renderPrototype({
+      sowRef: input.sowRef,
+      screens: inventory.screens,
+      assumptions: design.assumptions,
+    });
+    await writePrototype(protoDir, files);
+  }
+
+  const mockups = inventory.screens.map((screen, i) =>
+    Mockup.parse({
+      id: `MOCK-${String(i + 1).padStart(2, "0")}`,
+      title: screen.name,
+      path: `${protoDir ?? "prototypes"}/${slug(screen.name)}.html`,
+      relatedStoryIds: screen.storyIds,
+      screens: [screen.name],
+      fidelityPassed: false,
+    }),
   );
 
   await runStage(

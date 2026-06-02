@@ -61,6 +61,24 @@ and moving deterministic prototype rendering into the driver for live mode.
 **Constraint:** unverifiable in this sandbox — no `ANTHROPIC_API_KEY` present and
 the SDK spawns the Claude Code process; validate on a credentialed machine.
 
+### 2026-06-02 · Phase 2a — prototype rendering moved into the driver
+**Decided:** `proto-build` is no longer an LLM subagent. `proto-layout` (agent)
+produces the structured screen inventory; the **driver** renders the SLDS HTML
+deterministically (`driver/prototype.ts`), writing to `RunInput.prototypeOut.dir`.
+**Why:** identical prototypes in demo and live runs, no reliance on an agent's
+Write tool, and it fits "structure over pixels." **Consequence:** the
+`proto-build.md` file is now documentation of intent, not an invoked agent.
+
+### 2026-06-02 · Phase 2b — SdkRunner grants tools + MCP
+**Decided:** For tool-using agents, `SdkRunner` grants built-in tools (e.g.
+`Write`) and wires the MCP servers their `mcp__*` grants reference, loaded and
+sanitized from `.mcp.json` (`driver/mcp-config.ts` strips the `"//"` comment
+keys). Tool agents get multiple turns; plan agents stay single-shot. **Why:** the
+DX MCP is how `builder`/`qa` touch a real scratch org so the deploy-test gate
+bites with real coverage (§8). **Still deferred / untested:** an actual
+`builder`/`qa` run needs a connected DX MCP + a target org (none here); never
+point it at production (`BuildResult.isProduction` is a literal `false`).
+
 ### 2026-06-02 · Environment constraints (recorded)
 This managed sandbox has **no Anthropic credentials** (API reachable, 401) and
 **blocks browser-binary downloads** (Playwright/Chromium 403 "Host not in
