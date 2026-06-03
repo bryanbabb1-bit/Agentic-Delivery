@@ -13,7 +13,12 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { run } from "../../driver/orchestrator.js";
-import { FixtureRunner, AutoConfirmDiscovery, AutoApproveHumanGate } from "../../driver/runner.js";
+import {
+  FixtureRunner,
+  AutoConfirmDiscovery,
+  AutoApproveHumanGate,
+  ConsoleProgress,
+} from "../../driver/runner.js";
 import { makeFixtures } from "./fixtures.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +35,7 @@ async function main(): Promise<void> {
       runner: new FixtureRunner(makeFixtures()),
       discovery: new AutoConfirmDiscovery(),
       humanGate: new AutoApproveHumanGate(),
+      progress: new ConsoleProgress(),
     },
   );
 

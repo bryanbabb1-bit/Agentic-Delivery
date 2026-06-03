@@ -88,18 +88,29 @@ async function runStage<S extends z.ZodTypeAny>(
   stage: Stage<S>,
   input: unknown,
   deps: PipelineDeps,
+  label?: string,
 ): Promise<Out<S>> {
   stage.inputSchema.parse(input); // inbound seam check
 
+  await deps.progress?.report({ stage: stage.name, agent: stage.agent, kind: "agent", status: "start", detail: label });
   const raw = await deps.runner.run(stage.agent, input);
 
   const parsed = stage.outputSchema.safeParse(raw);
-  if (!parsed.success) throw new ContractViolation(stage.name, parsed.error, raw);
+  if (!parsed.success) {
+    await deps.progress?.report({ stage: stage.name, agent: stage.agent, kind: "agent", status: "blocked", detail: "contract violation" });
+    throw new ContractViolation(stage.name, parsed.error, raw);
+  }
   const output = parsed.data;
+  await deps.progress?.report({ stage: stage.name, agent: stage.agent, kind: "agent", status: "done", detail: label });
 
   if (stage.gate) {
+    await deps.progress?.report({ stage: stage.name, agent: stage.agent, kind: "gate", status: "start" });
     const result = await stage.gate(output);
-    if (!result.passed) throw new GateBlocked(result);
+    if (!result.passed) {
+      await deps.progress?.report({ stage: stage.name, agent: stage.agent, kind: "gate", status: "blocked", detail: `${result.failures.length} issue(s)` });
+      throw new GateBlocked(result);
+    }
+    await deps.progress?.report({ stage: stage.name, agent: stage.agent, kind: "gate", status: "done" });
     if (result.requiresHuman) await deps.humanGate.approve(result);
   }
 
@@ -239,11 +250,12 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
   );
 
   const stories: UserStory[] = [];
-  for (const epic of epics) {
+  for (const [i, epic] of epics.entries()) {
     const epicStories = await runStage(
       { name: "stories", agent: "story-writer", inputSchema: Epic, outputSchema: z.array(UserStory) },
       epic,
       deps,
+      `${epic.id}, ${i + 1}/${epics.length}`,
     );
     stories.push(...epicStories);
   }
@@ -276,12 +288,14 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
 
   const protoDir = input.prototypeOut?.dir;
   if (protoDir) {
+    await deps.progress?.report({ stage: "prototype", agent: "(driver)", kind: "render", status: "start", detail: `${inventory.screens.length} screen(s)` });
     const files = renderPrototype({
       sowRef: input.sowRef,
       screens: inventory.screens,
       assumptions: design.assumptions,
     });
     await writePrototype(protoDir, files);
+    await deps.progress?.report({ stage: "prototype", agent: "(driver)", kind: "render", status: "done" });
   }
 
   const mockups = inventory.screens.map((screen, i) =>
@@ -339,10 +353,13 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
         `Discovery did not converge after ${MAX_DISCOVERY_ROUNDS} rounds; blocking assumptions remain: ${remaining || "(none reported)"}.`,
       );
     }
+    const blockingCount = assumptions.filter((a) => a.blocking).length;
+    await deps.progress?.report({ stage: "discovery", agent: "(human loop)", kind: "discovery", status: "start", detail: `round ${round}, ${blockingCount} blocking` });
     const agenda = buildAssumptionAgenda(deliverable, assumptions);
     const verdicts: AssumptionVerdict[] = await deps.discovery.collectVerdicts(agenda);
     assumptions = applyVerdicts(assumptions, verdicts);
     deliverable = { ...deliverable, status: "in_discovery" };
+    await deps.progress?.report({ stage: "discovery", agent: "(human loop)", kind: "discovery", status: "done" });
   } while (blockingAssumptionsRemain(assumptions));
 
   // ---- Reconcile (architect gate) -----------------------------------------

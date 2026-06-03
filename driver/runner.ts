@@ -31,10 +31,31 @@ export interface HumanGate {
   approve(gate: GateResult): Promise<void>;
 }
 
+/** A pipeline progress event — emitted at each stage/gate/loop boundary. */
+export interface ProgressEvent {
+  /** The pipeline stage: parse, plan, stories, design, layout, fidelity, … */
+  stage: string;
+  /** The subagent (or "(driver)" / "(human loop)") doing the work. */
+  agent: string;
+  /** What kind of step this is. */
+  kind: "agent" | "gate" | "discovery" | "render";
+  /** Lifecycle: started, finished cleanly, or blocked/failed. */
+  status: "start" | "done" | "blocked";
+  /** Optional human-readable detail (e.g. "epic EP-03", "2 over-promises"). */
+  detail?: string;
+}
+
+/** Subscribes to pipeline progress. Surfaces (CLI log, web SSE) implement this. */
+export interface ProgressReporter {
+  report(e: ProgressEvent): void | Promise<void>;
+}
+
 export interface PipelineDeps {
   runner: SubagentRunner;
   discovery: DiscoveryProvider;
   humanGate: HumanGate;
+  /** Optional: receives a ProgressEvent at every stage boundary. */
+  progress?: ProgressReporter;
 }
 
 /* --------------------------------------------------- production seams (default) */
@@ -191,5 +212,34 @@ export class AutoConfirmDiscovery implements DiscoveryProvider {
 export class AutoApproveHumanGate implements HumanGate {
   async approve(_gate: GateResult): Promise<void> {
     /* no-op */
+  }
+}
+
+/* --------------------------------------------------------------- progress sinks */
+
+/** Human-readable label for an event (the agent, or the gate/loop it belongs to). */
+function progressLabel(e: ProgressEvent): string {
+  if (e.kind === "gate") return `${e.stage} gate`;
+  if (e.kind === "discovery") return "discovery loop";
+  if (e.kind === "render") return "prototype render";
+  return e.agent;
+}
+
+/**
+ * Prints pipeline progress to a stream (stderr by default, so stdout stays clean
+ * for the JSON package). Each stage shows a start line and a done/blocked line —
+ * the live "watch it move from one agent to the next" view in the terminal.
+ */
+export class ConsoleProgress implements ProgressReporter {
+  private n = 0;
+  constructor(private readonly out: NodeJS.WritableStream = process.stderr) {}
+  report(e: ProgressEvent): void {
+    const label = progressLabel(e);
+    const detail = e.detail ? ` (${e.detail})` : "";
+    if (e.status === "start") {
+      this.out.write(`[${String(++this.n).padStart(2, "0")}] -> ${label}${detail} ...`);
+    } else {
+      this.out.write(` ${e.status === "blocked" ? "BLOCKED" : "done"}${detail}\n`);
+    }
   }
 }

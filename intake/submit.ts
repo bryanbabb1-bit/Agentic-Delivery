@@ -15,6 +15,7 @@ import {
   AutoConfirmDiscovery,
   AutoApproveHumanGate,
   SdkRunner,
+  ConsoleProgress,
 } from "../driver/runner.js";
 
 const HELP = `sow-to-ship intake — submit a SOW, receive a deliverable package.
@@ -74,6 +75,8 @@ async function main(): Promise<void> {
   const deps: Record<string, unknown> = args.auto
     ? { discovery: new AutoConfirmDiscovery(), humanGate: new AutoApproveHumanGate() }
     : {};
+  // Live per-agent progress to stderr (stdout stays clean for the JSON package).
+  deps.progress = new ConsoleProgress();
   // The front half needs no Salesforce org, so run it with MCP disabled — the
   // designer grounds from the SOW + fsc-patterns skill instead of a live org.
   if (args.planOnly) deps.runner = new SdkRunner({ disableMcp: true });
