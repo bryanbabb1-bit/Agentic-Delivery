@@ -121,6 +121,9 @@
         <h2>Pipeline progress</h2>
         <div class="body"><ul id="progressList" class="steps"></ul></div>
       </div>
+      <div class="card hidden" id="regenCard" style="border-color:#1589ee;">
+        <div class="body"><button id="regen" type="button">Regenerate v2 with feedback</button> <span class="note" id="regenNote"></span></div>
+      </div>
       <div class="card">
         <h2>Deliverable package</h2>
         <div class="body" id="summary"><p class="note">No package yet — submit a SOW to generate one.</p></div>
@@ -259,11 +262,43 @@
       else if (e.status === "blocked") { li.className = "blocked"; ic.textContent = "✗"; }
     }
 
+    let lastSubmit = null;           // { sowText, sowRef, context } of the current package
+    let feedbackByScreen = {};       // aggregated v1 feedback (from prototype postMessage)
+
+    // Stream a run (initial or regenerate) and render as events arrive.
+    async function streamIntake(body) {
+      $("error").classList.add("hidden");
+      seedProgress();
+      const r = await fetch("/api/intake-stream", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok || !r.body) throw new Error("Generation failed to start");
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const lineStr = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!lineStr) continue;
+          const msg = JSON.parse(lineStr);
+          if (msg.type === "progress") updateProgress(msg.event);
+          else if (msg.type === "result") render(msg.result);
+          else if (msg.type === "error") throw new Error(msg.message);
+        }
+      }
+    }
+
     $("generate").addEventListener("click", async () => {
       let sowText = $("sowText").value;
       let sowRef = $("sowRef").value;
       $("error").classList.add("hidden");
-      // No SOW provided → fall back to the bundled example (one-click in demo).
       if (!sowText.trim()) {
         try {
           const ex = await (await fetch("/api/example")).json();
@@ -271,40 +306,41 @@
           $("sowText").value = sowText; $("sowRef").value = sowRef;
         } catch (e) { showError("Paste a SOW, or upload one, to generate."); return; }
       }
+      lastSubmit = { sowText, sowRef, context: $("contextText").value || undefined };
       $("generate").disabled = true;
       $("generate").textContent = "Generating…";
-      seedProgress();
-      try {
-        const r = await fetch("/api/intake-stream", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sowText, sowRef, context: $("contextText").value || undefined }),
-        });
-        if (!r.ok || !r.body) throw new Error("Generation failed to start");
-        const reader = r.body.getReader();
-        const dec = new TextDecoder();
-        let buf = "";
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          let nl;
-          while ((nl = buf.indexOf("\n")) >= 0) {
-            const lineStr = buf.slice(0, nl).trim();
-            buf = buf.slice(nl + 1);
-            if (!lineStr) continue;
-            const msg = JSON.parse(lineStr);
-            if (msg.type === "progress") updateProgress(msg.event);
-            else if (msg.type === "result") render(msg.result);
-            else if (msg.type === "error") throw new Error(msg.message);
-          }
-        }
-      } catch (e) {
-        showError(e.message);
-      } finally {
-        $("generate").disabled = false;
-        $("generate").textContent = "Generate package";
+      try { await streamIntake({ ...lastSubmit }); }
+      catch (e) { showError(e.message); }
+      finally { $("generate").disabled = false; $("generate").textContent = "Generate package"; }
+    });
+
+    // --- Feedback loop: collect v1 feedback from the prototype iframes, regenerate v2 ---
+    window.addEventListener("message", (ev) => {
+      const d = ev.data;
+      if (!d || d.type !== "sowship-feedback" || !d.feedback) return;
+      feedbackByScreen[d.feedback.screen || "screen"] = d.feedback;
+      updateRegen();
+    });
+    function feedbackCount() {
+      let n = 0;
+      for (const k in feedbackByScreen) {
+        const f = feedbackByScreen[k];
+        n += (f.notes || []).length + (f.fieldChanges || []).length + (f.assumptionVerdicts || []).length;
       }
+      return n;
+    }
+    function updateRegen() {
+      const n = feedbackCount();
+      const show = n > 0 && !!lastSubmit;
+      $("regenCard").classList.toggle("hidden", !show);
+      if (show) $("regenNote").textContent = `${n} feedback item(s) across ${Object.keys(feedbackByScreen).length} screen(s) — regenerate to fold them into a v2.`;
+    }
+    $("regen").addEventListener("click", async () => {
+      if (!lastSubmit) return;
+      $("regen").disabled = true; $("regen").textContent = "Regenerating v2…";
+      try { await streamIntake({ ...lastSubmit, feedback: Object.values(feedbackByScreen) }); }
+      catch (e) { showError(e.message); }
+      finally { $("regen").disabled = false; $("regen").textContent = "Regenerate v2 with feedback"; }
     });
 
     function showError(msg) { const el = $("error"); el.textContent = msg; el.classList.remove("hidden"); }
@@ -394,6 +430,7 @@
 
     function render(data) {
       lastResult = data;
+      feedbackByScreen = {}; updateRegen(); // a new version supersedes prior feedback
       const badge = $("mode");
       badge.textContent = data.mode + " mode";
       badge.style.background = data.mode === "live" ? "#2e844a" : "var(--warn)";

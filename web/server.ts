@@ -114,6 +114,7 @@ const server = createServer(async (req, res) => {
           sowText: String(body.sowText ?? ""),
           sowRef: body.sowRef,
           context: body.context,
+          feedback: Array.isArray(body.feedback) ? body.feedback : undefined,
           runsRoot,
           progress: { report: (e) => { line({ type: "progress", event: e }); } },
         });

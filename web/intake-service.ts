@@ -23,6 +23,7 @@ import {
   SdkRunner,
   AutoConfirmDiscovery,
   AutoApproveHumanGate,
+  FeedbackDiscovery,
   type PipelineDeps,
   type ProgressReporter,
 } from "../driver/runner.js";
@@ -36,14 +37,38 @@ export function isLiveMode(): boolean {
   );
 }
 
+/** Per-screen feedback captured from a prototype (the v1 → v2 loop input). */
+export interface ScreenFeedback {
+  screen?: string;
+  notes?: { target?: string; text?: string }[];
+  fieldChanges?: { field?: string; action?: string }[];
+  removedFields?: string[];
+  assumptionVerdicts?: { assumptionId?: string; verdict?: string; correction?: string }[];
+}
+
 export interface IntakeRequest {
   sowText: string;
   sowRef?: string;
   runsRoot: string;
   /** Optional supporting sales/discovery context (grounding, NOT scope). */
   context?: string;
+  /** Optional captured v1 feedback — drives the regenerate-to-v2 loop. */
+  feedback?: ScreenFeedback[];
   /** Optional: receives per-agent progress events as the pipeline runs. */
   progress?: ProgressReporter;
+}
+
+/** Turn captured feedback into revision guidance the agents incorporate into v2. */
+function revisionGuidance(feedback: ScreenFeedback[]): string {
+  const lines: string[] = [];
+  for (const f of feedback) {
+    const scr = f.screen || "a screen";
+    for (const n of f.notes ?? []) if (n.text) lines.push(`- [${scr} · ${n.target ?? "screen"}] note: ${n.text}`);
+    for (const fc of f.fieldChanges ?? []) if (fc.field) lines.push(`- [${scr}] field "${fc.field}" → ${fc.action}`);
+    for (const v of f.assumptionVerdicts ?? []) if (v.verdict === "correct" && v.correction) lines.push(`- [${scr}] assumption ${v.assumptionId} corrected: ${v.correction}`);
+  }
+  if (!lines.length) return "";
+  return `## Client feedback on the previous version (v1) — incorporate into v2\nThe client reviewed the prototype and gave the feedback below. Apply it: reorder/remove fields as noted, address notes, and reflect corrected assumptions in the stories, designs, and prototype. The SOW remains the source of truth for SCOPE — feedback refines, it does not add scope.\n\n${lines.join("\n")}`;
 }
 
 export interface PrototypeRef {
@@ -92,11 +117,21 @@ export async function runIntake(req: IntakeRequest): Promise<IntakeResult> {
   const outDir = join(req.runsRoot, runId);
   const sowRef = req.sowRef?.trim() || `INTAKE-${runId.slice(0, 8)}`;
   const live = isLiveMode();
-  const runInput = { sowRef, sowText: req.sowText, context: req.context, prototypeOut: { dir: outDir } };
+
+  // v1→v2 loop: captured feedback becomes (a) revision guidance appended to the
+  // grounding context and (b) the discovery verdicts (corrections honored).
+  const feedback = req.feedback ?? [];
+  const guidance = feedback.length ? revisionGuidance(feedback) : "";
+  const context = [req.context, guidance].filter((s) => s && s.trim()).join("\n\n---\n\n") || undefined;
+  const runInput = { sowRef, sowText: req.sowText, context, prototypeOut: { dir: outDir } };
 
   // Live = real agents, front half only (no org). Demo = full pipeline via fixtures.
   const deps = live ? liveDeps(process.cwd()) : demoDeps();
   if (req.progress) deps.progress = req.progress;
+  if (feedback.length) {
+    const verdicts = feedback.flatMap((f) => f.assumptionVerdicts ?? []);
+    deps.discovery = new FeedbackDiscovery(verdicts);
+  }
   const result = live
     ? await runPlanPhase(runInput, deps)
     : await run(runInput, deps);

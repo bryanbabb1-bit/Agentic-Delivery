@@ -221,6 +221,35 @@ export class AutoConfirmDiscovery implements DiscoveryProvider {
   }
 }
 
+/**
+ * Discovery driven by CAPTURED client feedback (the feedback→re-run loop). For
+ * each assumption: apply the captured `correct` (with its correction) where one
+ * exists; otherwise confirm — so the loop still converges. This is how v1
+ * feedback becomes v2's discovery verdicts.
+ */
+export class FeedbackDiscovery implements DiscoveryProvider {
+  private readonly verdicts = new Map<string, { verdict: "confirm" | "correct"; correction?: string }>();
+  constructor(verdicts: Array<{ assumptionId?: string; verdict?: string; correction?: string }> = []) {
+    for (const v of verdicts) {
+      if (!v || !v.assumptionId) continue;
+      if (v.verdict === "correct" && v.correction && v.correction.trim()) {
+        this.verdicts.set(v.assumptionId, { verdict: "correct", correction: v.correction.trim() });
+      } else if (v.verdict === "confirm") {
+        this.verdicts.set(v.assumptionId, { verdict: "confirm" });
+      }
+    }
+  }
+  async collectVerdicts(agenda: AssumptionAgenda): Promise<AssumptionVerdict[]> {
+    return agenda.items.map((item) => {
+      const v = this.verdicts.get(item.assumptionId);
+      if (v && v.verdict === "correct" && v.correction) {
+        return { assumptionId: item.assumptionId, verdict: "correct" as const, correction: v.correction };
+      }
+      return { assumptionId: item.assumptionId, verdict: "confirm" as const };
+    });
+  }
+}
+
 /** Auto-approves human gates — for tests/examples only. */
 export class AutoApproveHumanGate implements HumanGate {
   async approve(_gate: GateResult): Promise<void> {
