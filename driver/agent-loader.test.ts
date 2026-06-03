@@ -52,6 +52,14 @@ describe("extractJson", () => {
   it("recovers JSON surrounded by prose", () => {
     expect(extractJson('Here you go: {"ok":true} — done')).toEqual({ ok: true });
   });
+  it("takes the first complete value when trailing content follows", () => {
+    // The reconciler sometimes emits a second object / closing remark after the JSON.
+    expect(extractJson('{"changes":[]}\n{"note":"done"}')).toEqual({ changes: [] });
+    expect(extractJson('[]\nthat is all')).toEqual([]);
+  });
+  it("ignores braces inside string values when scanning", () => {
+    expect(extractJson('{"a":"a } b","b":1} trailing')).toEqual({ a: "a } b", b: 1 });
+  });
   it("throws when there is no JSON", () => {
     expect(() => extractJson("no json here")).toThrow();
   });

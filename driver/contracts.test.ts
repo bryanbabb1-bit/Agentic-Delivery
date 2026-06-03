@@ -11,11 +11,34 @@ import {
   UserStory,
   BuildResult,
   DeliverablePackage,
+  AutomationChoice,
 } from "./contracts.js";
 import {
   evaluateDeployTestGate,
   evaluateFidelityGate,
 } from "../gates/gate-lib.js";
+
+describe("AutomationChoice (tolerant)", () => {
+  it("passes valid styles through", () => {
+    for (const v of ["config", "validation_rule", "flow", "apex", "omnistudio", "mixed"]) {
+      expect(AutomationChoice.parse(v)).toBe(v);
+    }
+  });
+  it("maps feature/metadata words to config (declarative-first)", () => {
+    expect(AutomationChoice.parse("rollup")).toBe("config");
+    expect(AutomationChoice.parse("record_type")).toBe("config");
+    expect(AutomationChoice.parse("page_layout")).toBe("config");
+  });
+  it("maps fuzzy style words to the right style", () => {
+    expect(AutomationChoice.parse("Screen Flow")).toBe("flow");
+    expect(AutomationChoice.parse("Apex Trigger")).toBe("apex");
+    expect(AutomationChoice.parse("OmniScript")).toBe("omnistudio");
+    expect(AutomationChoice.parse("validation")).toBe("validation_rule");
+  });
+  it("falls back to config for anything unrecognized", () => {
+    expect(AutomationChoice.parse("something else")).toBe("config");
+  });
+});
 
 describe("SowItem", () => {
   it("parses a well-formed item", () => {
