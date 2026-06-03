@@ -94,19 +94,16 @@ export function makeFixtures(): FixtureMap {
     designer: (input) => {
       const stories = input as UserStory[];
       return {
-        storyPackages: stories.map((story) => ({
-          story,
-          solutionDesign: {
-            storyId: story.id,
-            approach:
-              "Standard FSC Lightning profile on the Person Account, composed from native components.",
-            automation: "config",
-            components: [
-              { type: "page_layout", apiName: "Client_360_Profile", action: "create" },
-            ],
-            testApproach:
-              "SIT: open a Person Account and verify the profile renders accounts, goals, and activity.",
-          },
+        solutionDesigns: stories.map((story) => ({
+          storyId: story.id,
+          approach:
+            "Standard FSC Lightning profile on the Person Account, composed from native components.",
+          automation: "config",
+          components: [
+            { type: "page_layout", apiName: "Client_360_Profile", action: "create" },
+          ],
+          testApproach:
+            "SIT: open a Person Account and verify the profile renders accounts, goals, and activity.",
         })),
         epicDesigns: [
           {

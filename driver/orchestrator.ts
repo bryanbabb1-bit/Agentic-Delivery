@@ -20,6 +20,7 @@ import {
   Epic,
   UserStory,
   StoryPackage,
+  SolutionDesign,
   DesignNote,
   BuildResult,
   QaResult,
@@ -131,20 +132,31 @@ const ScreenInventory = z.object({
   ),
 });
 
-// proto-fidelity emits { passes, violations[] }; only `passes` is needed at the seam.
+// proto-fidelity emits { passes, violations[] }. Each violation's `kind`
+// distinguishes a true over-promise (blocks) from an open assumption (expected
+// pre-discovery; surfaced in the panel, does not block) — see evaluateFidelityGate.
 const FidelityReport = z.object({
   passes: z.boolean(),
   violations: z
-    .array(z.object({ element: z.string(), reason: z.string(), severity: z.string() }))
+    .array(
+      z.object({
+        element: z.string(),
+        reason: z.string(),
+        severity: z.string(),
+        kind: z.enum(["over_promise", "open_assumption"]).optional(),
+      }),
+    )
     .default([]),
 });
 
 const Walkthrough = z.object({ scriptPath: z.string() });
 
-// designer emits the story packages, cross-cutting design notes, and the
-// assumption register that seeds discovery.
+// designer emits per-story SolutionDesigns (keyed by storyId), cross-cutting
+// design notes, and the assumption register that seeds discovery. It does NOT
+// re-echo the stories — the orchestrator owns assembling the story packages from
+// the already-validated stories, so a garbled echo can't corrupt them.
 const DesignerOutput = z.object({
-  storyPackages: z.array(StoryPackage),
+  solutionDesigns: z.array(SolutionDesign),
   epicDesigns: z.array(DesignNote),
   assumptions: z.array(Assumption),
 });
@@ -242,6 +254,14 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
     deps,
   );
 
+  // Assemble story packages from the already-validated stories + the designer's
+  // per-story SolutionDesigns (matched by storyId). A story with no returned
+  // design degrades to null rather than failing the stage.
+  const designByStory = new Map(design.solutionDesigns.map((sd) => [sd.storyId, sd]));
+  const storyPackages = stories.map((story) =>
+    StoryPackage.parse({ story, solutionDesign: designByStory.get(story.id) ?? null }),
+  );
+
   // ---- Prototype sub-pipeline ---------------------------------------------
   // layout (agent → structured inventory) → DRIVER renders HTML deterministically
   // → fidelity (gated) → walkthrough. Rendering lives in the driver, not an LLM:
@@ -283,7 +303,7 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
       outputSchema: FidelityReport,
       gate: fidelityGate,
     },
-    { mockups, designNotes: design.epicDesigns },
+    { mockups, designNotes: design.epicDesigns, assumptions: design.assumptions },
     deps,
   );
 
@@ -300,7 +320,7 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
     sowRef: input.sowRef,
     generatedOn: new Date().toISOString(),
     epics,
-    storyPackages: design.storyPackages,
+    storyPackages,
     epicDesigns: design.epicDesigns,
     mockups: fidelityPassedMockups,
     assumptionRegisterRef: `${input.sowRef}::assumptions`,

@@ -13,6 +13,9 @@ prototypes/*
 # Per-submission run output from the web intake server
 web/.runs/
 
+# Local intake CLI run output (npm run intake -- ... --out live-run-*.json)
+live-run-*.json
+
 # Local env / secrets
 .env
 .env.local

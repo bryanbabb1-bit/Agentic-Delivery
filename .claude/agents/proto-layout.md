@@ -39,7 +39,10 @@ screen object uses these exact field names:
 
 For a richer, more realistic v1, also include where they apply: **subtitle**,
 **fieldValues** (a map of field → sample value), **highlights** (`[{label,
-value}]` for the header), and **relatedLists** (`[{title, columns, rows}]`).
+value}]` for the header), and **relatedLists**. Each related list is
+`{ "title", "columns": [strings], "rows": [[strings]] }` where **each row is an
+array of cell strings positionally matching `columns`** — rows are arrays, NOT
+objects (e.g. `"rows": [["Checking ••4021", "Checking", "$12,500"]]`).
 Keep the inventory to what the stories actually need — this is the v1 the client
 reacts to, not an exhaustive app map.
 

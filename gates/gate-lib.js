@@ -68,9 +68,19 @@ export function evaluateDeployTestGate(payload, opts = {}) {
 
 /**
  * Fidelity gate (adversarial agent + human confirm). The proto-fidelity agent
- * emits { passes, violations: [{element, reason, severity}] }. The automated
- * portion passes only when `passes === true` with no unresolved violations;
- * `requiresHuman` is always true because a human confirms the fidelity call.
+ * emits { passes, violations: [{element, reason, severity, kind}] }, where each
+ * violation's `kind` is either:
+ *   - "over_promise"    — the prototype presents something as built/native that
+ *                         cannot be delivered natively in scope. BLOCKS.
+ *   - "open_assumption" — the element rests on an unresolved assumption that
+ *                         discovery is meant to resolve and that is surfaced in
+ *                         the assumption panel. Expected pre-discovery; does NOT
+ *                         block (the prototype → discovery → reconcile flow is
+ *                         exactly where these get resolved).
+ *
+ * Only over-promises fail the automated portion. To stay safe, classification is
+ * fail-closed: anything NOT explicitly marked `open_assumption` is treated as an
+ * over-promise. `requiresHuman` is always true — a human confirms the call.
  *
  * @param {Record<string, unknown>} report  proto-fidelity structured output
  * @returns {GateResultShape}
@@ -79,10 +89,10 @@ export function evaluateFidelityGate(report) {
   const failures = [];
   const violations = Array.isArray(report.violations) ? report.violations : [];
 
-  if (report.passes !== true) {
-    failures.push("proto-fidelity reported passes=false");
-  }
-  for (const v of violations) {
+  const overPromises = violations.filter(
+    (v) => !(v && typeof v === "object" && v.kind === "open_assumption"),
+  );
+  for (const v of overPromises) {
     const element = v && typeof v === "object" ? v.element : undefined;
     const reason = v && typeof v === "object" ? v.reason : undefined;
     failures.push(`over-promise: ${element ?? "?"} — ${reason ?? "unspecified"}`);

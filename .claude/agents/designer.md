@@ -52,23 +52,19 @@ lets it pass the fidelity guardrail.
 Produce a single JSON object with these three keys, each object carrying **all**
 its required fields:
 
-1. **storyPackages** — one per story. Each is `{ story, solutionDesign }` where:
-   - **story** — the `UserStory` echoed back **EXACTLY as given**: same `id`,
-     `epicId`, `persona`, `asA`, `iWant`, `soThat`, `acceptanceCriteria`,
-     `status`, `dependencies`, and `blockingFlags`. Do **not** edit the story.
-     If your design reveals a blocker, capture it in the **`assumptions`**
-     register (`blocking: true`, with the story's id in `relatedStoryIds`) —
-     never by adding a `blockingFlag` to the story. (A `ready` story must keep
-     zero `blockingFlags`; the contract rejects a `ready` story that has any.)
-   - **solutionDesign** — required fields: **`storyId`** (equal to the story's
-     `id`), **`approach`** (the on-platform narrative), and **`automation`** (one
-     of `config`, `validation_rule`, `flow`, `apex`, `omnistudio`, `mixed`).
-     **`components`** is an array of **objects** (never bare strings), each
-     `{ "type", "apiName", "action" }` where `type` is one of `object`, `field`,
-     `record_type`, `flow`, `apex_class`, `apex_test`, `lwc`, `permission_set`,
-     `action_plan_template`, `rollup`, `page_layout`; `apiName` is the metadata
-     API name; and `action` is one of `create`, `modify`, `reuse`. Also include a
-     `testApproach` tied to the ACs.
+1. **solutionDesigns** — one `SolutionDesign` per story. **Do NOT echo the
+   stories themselves** — the pipeline already has them and re-attaches them by
+   `storyId`. Each SolutionDesign's required fields: **`storyId`** (the `id` of
+   the story it designs), **`approach`** (the on-platform narrative), and
+   **`automation`** (one of `config`, `validation_rule`, `flow`, `apex`,
+   `omnistudio`, `mixed`). **`components`** is an array of **objects** (never bare
+   strings), each `{ "type", "apiName", "action" }` where `type` is one of
+   `object`, `field`, `record_type`, `flow`, `apex_class`, `apex_test`, `lwc`,
+   `permission_set`, `action_plan_template`, `rollup`, `page_layout`; `apiName` is
+   the metadata API name; and `action` is one of `create`, `modify`, `reuse`.
+   Also include a `testApproach` tied to the ACs. If your design reveals a
+   blocker, capture it in the **`assumptions`** register (`blocking: true`, with
+   the story's id in `relatedStoryIds`).
 2. **epicDesigns** — `DesignNote`s for CROSS-CUTTING concerns only (shared data
    model, shared automation, integration contracts). Required fields: **`id`**
    (form `DN-01`, `DN-02`, …), **`epicId`**, **`storyIds`** (≥1), and
@@ -83,7 +79,7 @@ its required fields:
    guessed it — SOW excerpt, FSC default, prior art), and **`blocking`** (`true`
    when a build depends on resolving it). This register seeds discovery.
 
-Output a single JSON object: `{ storyPackages, epicDesigns, assumptions }`.
+Output a single JSON object: `{ solutionDesigns, epicDesigns, assumptions }`.
 
 ## House rules
 Output only schema-valid JSON — nothing else. Flag gaps rather than invent (an
