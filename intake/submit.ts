@@ -8,9 +8,9 @@
  *
  *   npm run intake -- <path/to/sow.txt> [--ref SOW-REF] [--out deliverable.json]
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { run, runPlanPhase } from "../driver/orchestrator.js";
+import { run, runPlanPhase, ContractViolation } from "../driver/orchestrator.js";
 import {
   AutoConfirmDiscovery,
   AutoApproveHumanGate,
@@ -99,7 +99,22 @@ async function main(): Promise<void> {
   console.log(`Prototype rendered to ${join(protoDir, "index.html")}`);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(`intake failed: ${err instanceof Error ? err.message : String(err)}`);
+  // Self-logging: on a contract violation, dump the full raw agent output + the
+  // validation issues so a failure can be diagnosed without re-running.
+  if (err instanceof ContractViolation) {
+    try {
+      await mkdir("hardening", { recursive: true });
+      await writeFile(
+        join("hardening", `fail-${err.stage}.json`),
+        JSON.stringify({ stage: err.stage, issues: err.issues.issues, raw: err.raw }, null, 2),
+        "utf8",
+      );
+      console.error(`(full raw '${err.stage}' output dumped to hardening/fail-${err.stage}.json)`);
+    } catch {
+      /* best-effort */
+    }
+  }
   process.exit(1);
 });

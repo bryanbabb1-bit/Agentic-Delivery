@@ -51,8 +51,8 @@ type Out<S extends z.ZodTypeAny> = z.infer<S>;
 
 /** Raised when an agent's output doesn't satisfy its contract — halts at the seam. */
 export class ContractViolation extends Error {
-  constructor(stage: string, readonly issues: z.ZodError, raw?: unknown) {
-    const got = raw === undefined ? "" : ` | got: ${JSON.stringify(raw).slice(0, 300)}`;
+  constructor(readonly stage: string, readonly issues: z.ZodError, readonly raw?: unknown) {
+    const got = raw === undefined ? "" : ` | got: ${JSON.stringify(raw).slice(0, 600)}`;
     super(`Contract violation at stage '${stage}': ${issues.message}${got}`);
     this.name = "ContractViolation";
   }

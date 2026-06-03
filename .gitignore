@@ -20,6 +20,9 @@ live-run-*.json
 examples/zennify-sbh/
 examples/**/*.real.txt
 
+# Overnight hardening workspace (run logs, failure dumps, journal)
+hardening/
+
 # Local env / secrets
 .env
 .env.local
