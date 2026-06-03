@@ -55,6 +55,22 @@
     .steps li.blocked { color:#ba0517; }
     @keyframes spin { to { transform:rotate(360deg); } }
     .steps li.active .ic { display:inline-block; animation:spin 1s linear infinite; }
+    details.epic { border:1px solid var(--border); border-radius:.25rem; margin-bottom:.5rem; }
+    details.epic > summary { padding:.55rem .7rem; cursor:pointer; font-weight:700; font-size:.86rem; background:#fafaf9; list-style:none; }
+    details.epic > summary::-webkit-details-marker { display:none; }
+    details.epic > summary .meta { font-weight:400; color:var(--weak); font-size:.76rem; }
+    .epic-body { padding:.5rem .7rem; }
+    details.story { border-left:3px solid #e5e5e5; margin:.4rem 0; padding-left:.6rem; }
+    details.story > summary { cursor:pointer; font-size:.82rem; list-style:none; }
+    details.story > summary::-webkit-details-marker { display:none; }
+    .stmt { font-size:.8rem; color:#444; margin:.3rem 0; }
+    .ac { font-size:.78rem; background:#f7f7f7; border-radius:.2rem; padding:.35rem .5rem; margin:.25rem 0; }
+    .sd { font-size:.78rem; color:#333; margin:.3rem 0; }
+    .sd .tag { display:inline-block; background:#ecebea; border-radius:.2rem; padding:.05rem .4rem; font-size:.68rem; margin-right:.3rem; }
+    .spill { font-size:.66rem; text-transform:uppercase; border-radius:.25rem; padding:.05rem .4rem; }
+    .spill.ready { background:#2e844a; color:#fff; }
+    .spill.draft { background:#ecebea; color:#514f4d; }
+    .spill.blocked { background:var(--warn); color:#2b2826; }
   </style>
 </head>
 <body>
@@ -94,6 +110,10 @@
       <div class="card">
         <h2>Deliverable package</h2>
         <div class="body" id="summary"><p class="note">No package yet — submit a SOW to generate one.</p></div>
+      </div>
+      <div class="card hidden" id="contentsCard">
+        <h2>Epics &amp; user stories <button class="secondary" id="dlMd" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;">Download .md</button><button class="secondary" id="dlJson" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">Download .json</button></h2>
+        <div class="body" id="contents"></div>
       </div>
       <div class="card hidden" id="asmCard">
         <h2>Assumption register</h2>
@@ -229,13 +249,84 @@
 
     function showError(msg) { const el = $("error"); el.textContent = msg; el.classList.remove("hidden"); }
 
+    let lastResult = null; // for downloads
+
+    function statusPill(s) {
+      const cls = s === "ready" ? "ready" : s === "blocked" ? "blocked" : "draft";
+      return `<span class="spill ${cls}">${esc(s)}</span>`;
+    }
+    function storyHtml(p) {
+      const s = p.story, sd = p.solutionDesign;
+      const ac = (s.acceptanceCriteria || []).map((c) =>
+        `<div class="ac"><strong>Given</strong> ${esc(c.given)} · <strong>When</strong> ${esc(c.when)} · <strong>Then</strong> ${esc(c.then)}</div>`).join("");
+      const sdHtml = sd
+        ? `<div class="sd"><span class="tag">${esc(sd.automation)}</span>${esc(sd.approach)}
+            ${(sd.components || []).length ? `<div style="margin-top:.25rem;">${sd.components.map((c) => `<span class="tag">${esc(c.action)} ${esc(c.type)}: ${esc(c.apiName)}</span>`).join("")}</div>` : ""}
+            ${sd.testApproach ? `<div style="margin-top:.25rem;color:#666;">Test: ${esc(sd.testApproach)}</div>` : ""}</div>`
+        : '<div class="sd" style="color:#999;">No solution design yet.</div>';
+      const flags = (s.blockingFlags || []).length ? `<div class="stmt" style="color:#b35;">⚑ ${s.blockingFlags.map(esc).join("; ")}</div>` : "";
+      return `<details class="story"><summary>${esc(s.id)} ${statusPill(s.status)} — ${esc(s.iWant)}</summary>
+        <div class="stmt">As a <strong>${esc(s.persona)}</strong>, I want ${esc(s.iWant)}, so that ${esc(s.soThat)}.</div>
+        ${ac}${sdHtml}${flags}</details>`;
+    }
+    function renderContents(pkg) {
+      const sp = pkg.storyPackages || [];
+      const byEpic = {};
+      sp.forEach((p) => { (byEpic[p.story.epicId] = byEpic[p.story.epicId] || []).push(p); });
+      const html = (pkg.epics || []).map((ep) => {
+        const stories = byEpic[ep.id] || [];
+        const ready = stories.filter((s) => s.story.status === "ready").length;
+        return `<details class="epic"><summary>${esc(ep.id)} · ${esc(ep.title)}
+          <span class="meta">— ${stories.length} stor${stories.length === 1 ? "y" : "ies"} (${ready} ready) · ${esc((ep.personas || []).join(", "))}</span></summary>
+          <div class="epic-body"><div class="stmt"><em>${esc(ep.acceptanceTheme || "")}</em></div>
+          ${stories.map(storyHtml).join("")}</div></details>`;
+      }).join("");
+      $("contents").innerHTML = html || '<p class="note">No epics.</p>';
+      $("contentsCard").classList.toggle("hidden", !(pkg.epics || []).length);
+    }
+    function buildMarkdown(data) {
+      const pkg = data.result.deliverable, asms = data.result.assumptions || [], rec = data.result.reconciled;
+      const sp = pkg.storyPackages || [], byEpic = {};
+      sp.forEach((p) => { (byEpic[p.story.epicId] = byEpic[p.story.epicId] || []).push(p); });
+      let m = `# ${pkg.sowRef} — Deliverable Package\n\nStatus: ${pkg.status} · Generated: ${pkg.generatedOn}\n\n`;
+      (pkg.epics || []).forEach((ep) => {
+        m += `## ${ep.id} — ${ep.title}\n\n*Personas:* ${(ep.personas || []).join(", ")}\n\n*Outcome:* ${ep.acceptanceTheme || ""}\n\n`;
+        (byEpic[ep.id] || []).forEach((p) => {
+          const s = p.story, sd = p.solutionDesign;
+          m += `### ${s.id} — ${s.iWant} _(${s.status})_\n\nAs a **${s.persona}**, I want ${s.iWant}, so that ${s.soThat}.\n\n`;
+          (s.acceptanceCriteria || []).forEach((c) => { m += `- **Given** ${c.given} **When** ${c.when} **Then** ${c.then}\n`; });
+          if ((s.blockingFlags || []).length) m += `\n> ⚑ Blocking: ${s.blockingFlags.join("; ")}\n`;
+          if (sd) {
+            m += `\n**Solution design** (${sd.automation}): ${sd.approach}\n`;
+            (sd.components || []).forEach((c) => { m += `- ${c.action} ${c.type}: \`${c.apiName}\`\n`; });
+            if (sd.testApproach) m += `\n*Test:* ${sd.testApproach}\n`;
+          }
+          m += `\n`;
+        });
+      });
+      if (asms.length) { m += `## Assumption register\n\n`; asms.forEach((a) => { m += `- ${a.blocking ? "**[BLOCKING]** " : ""}**${a.topic}** — ${a.statement}\n`; }); m += `\n`; }
+      if (rec && (rec.changes || []).length) { m += `## Reconcile changes\n\n`; rec.changes.forEach((c) => { m += `- ${c.change} _(${c.reason})_\n`; }); }
+      return m;
+    }
+    function downloadBlob(name, text, type) {
+      const blob = new Blob([text], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name; a.click();
+      URL.revokeObjectURL(url);
+    }
+    $("dlJson").addEventListener("click", () => { if (lastResult) downloadBlob(`${lastResult.sowRef || "package"}.json`, JSON.stringify(lastResult.result, null, 2), "application/json"); });
+    $("dlMd").addEventListener("click", () => { if (lastResult) downloadBlob(`${lastResult.sowRef || "package"}.md`, buildMarkdown(lastResult), "text/markdown"); });
+
     function render(data) {
+      lastResult = data;
       const badge = $("mode");
       badge.textContent = data.mode + " mode";
       badge.style.background = data.mode === "live" ? "#2e844a" : "var(--warn)";
       badge.style.color = data.mode === "live" ? "#fff" : "#2b2826";
       const pkg = data.result.deliverable;
       const handoff = data.result.handoff;
+      renderContents(pkg);
       const metric = (k, v) => `<div class="metric"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
       $("summary").innerHTML = `
         <div class="metrics">
