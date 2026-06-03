@@ -68,8 +68,40 @@ export function buildUserPrompt(input: unknown): string {
 }
 
 /**
+ * Scan from the first `{`/`[` and return the first COMPLETE, depth-balanced JSON
+ * value, ignoring any trailing content (a second object, a closing remark, etc.).
+ * String-aware so braces inside string literals don't throw off the depth count.
+ */
+function firstJsonValue(t: string): string | null {
+  const a = t.indexOf("{");
+  const b = t.indexOf("[");
+  const start = a < 0 ? b : b < 0 ? a : Math.min(a, b);
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < t.length; i++) {
+    const c = t[i]!;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{" || c === "[") depth++;
+    else if (c === "}" || c === "]") {
+      if (--depth === 0) return t.slice(start, i + 1);
+    }
+  }
+  return null; // unbalanced — no complete value
+}
+
+/**
  * Recover the JSON an agent emitted. Tolerates code fences and surrounding prose:
- * tries a direct parse, then falls back to the outermost {...} / [...] slice.
+ * tries a direct parse, then extracts the first complete top-level JSON value
+ * (robust to trailing content the model appended after it).
  */
 export function extractJson(text: string): unknown {
   let t = text.trim();
@@ -80,15 +112,11 @@ export function extractJson(text: string): unknown {
   try {
     return JSON.parse(t);
   } catch {
-    /* fall through to slice */
+    /* fall through to balanced-scan extraction */
   }
 
-  const starts = ["{", "["].map((c) => t.indexOf(c)).filter((i) => i >= 0);
-  const start = starts.length ? Math.min(...starts) : -1;
-  const end = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]"));
-  if (start >= 0 && end > start) {
-    return JSON.parse(t.slice(start, end + 1));
-  }
+  const candidate = firstJsonValue(t);
+  if (candidate) return JSON.parse(candidate);
 
   throw new Error(`Could not extract JSON from agent output: ${text.slice(0, 200)}…`);
 }

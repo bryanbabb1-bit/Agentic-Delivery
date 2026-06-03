@@ -16,7 +16,7 @@ import type {
   BuildResult,
   QaResult,
 } from "../../driver/contracts.js";
-import type { Assumption, V1 } from "../../driver/v1-reconcile.js";
+import type { Assumption } from "../../driver/v1-reconcile.js";
 import type { FixtureMap } from "../../driver/runner.js";
 
 /** Shared by the designer register and the proto-layout assumption-bearing screens. */
@@ -192,23 +192,19 @@ export function makeFixtures(): FixtureMap {
       scriptPath: "prototypes/zennify-client360-walkthrough.md",
     }),
 
-    reconciler: (input) => {
-      const v1 = input as V1;
-      return {
-        base: { ...v1.package, status: "reconciled" },
-        changes: [
-          {
-            id: "CH-01",
-            targetType: "design",
-            targetId: "DN-01",
-            change: "Confirmed Person Account model; no rework needed.",
-            reason: "ASM-01 confirmed in discovery",
-          },
-        ],
-        scopeDeltas: [],
-        status: "reconciled",
-      };
-    },
+    reconciler: () => ({
+      // Diff only — the orchestrator assembles v2 from the package it holds.
+      changes: [
+        {
+          id: "CH-01",
+          targetType: "design",
+          targetId: "DN-01",
+          change: "Confirmed Person Account model; no rework needed.",
+          reason: "ASM-01 confirmed in discovery",
+        },
+      ],
+      scopeDeltas: [],
+    }),
 
     builder: (input) => {
       const dn = input as { id: string };

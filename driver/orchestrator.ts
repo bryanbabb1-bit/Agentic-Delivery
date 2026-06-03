@@ -29,7 +29,7 @@ import {
   Mockup,
   DeliverablePackage,
 } from "./contracts.js";
-import { V1, V2, Assumption, type AssumptionVerdict } from "./v1-reconcile.js";
+import { V1, V2, Assumption, ChangeItem, ScopeDelta, type AssumptionVerdict } from "./v1-reconcile.js";
 import {
   buildAssumptionAgenda,
   applyVerdicts,
@@ -170,6 +170,14 @@ const DesignerOutput = z.object({
   solutionDesigns: z.array(SolutionDesign),
   epicDesigns: z.array(DesignNote),
   assumptions: z.array(Assumption),
+});
+
+// reconciler emits ONLY the diff (audit trail + scope deltas), NOT the whole
+// package — the orchestrator already holds the v1 package and assembles v2 from
+// it. Echoing a 40-story package back was the fragile part that broke extraction.
+const ReconcilerDiff = z.object({
+  changes: z.array(ChangeItem).default([]),
+  scopeDeltas: z.array(ScopeDelta).default([]),
 });
 
 /* ---------------------------------------------------------------------- gates */
@@ -363,12 +371,32 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
   } while (blockingAssumptionsRemain(assumptions));
 
   // ---- Reconcile (architect gate) -----------------------------------------
+  // The reconciler returns only the diff; the orchestrator assembles v2 from the
+  // package it already holds (status -> reconciled). This keeps the agent's output
+  // small and reliable instead of re-echoing the whole package.
   const v1: V1 = V1.parse({ package: deliverable, assumptions });
-  const reconciled = await runStage(
-    { name: "reconcile", agent: "reconciler", inputSchema: V1, outputSchema: V2, gate: architectGate },
+  const diff = await runStage(
+    { name: "reconcile", agent: "reconciler", inputSchema: V1, outputSchema: ReconcilerDiff },
     v1,
     deps,
   );
+  const reconciled: V2 = V2.parse({
+    base: { ...deliverable, status: "reconciled" },
+    changes: diff.changes,
+    scopeDeltas: diff.scopeDeltas,
+    status: "reconciled",
+  });
+
+  // Architect gate (human dispositions the scope deltas).
+  await deps.progress?.report({ stage: "reconcile", agent: "architect", kind: "gate", status: "start" });
+  const gate = await architectGate(reconciled);
+  if (!gate.passed) {
+    await deps.progress?.report({ stage: "reconcile", agent: "architect", kind: "gate", status: "blocked", detail: `${gate.failures.length} issue(s)` });
+    throw new GateBlocked(gate);
+  }
+  await deps.progress?.report({ stage: "reconcile", agent: "architect", kind: "gate", status: "done" });
+  if (gate.requiresHuman) await deps.humanGate.approve(gate);
+
   return { deliverable: reconciled.base, assumptions, reconciled };
 }
 
