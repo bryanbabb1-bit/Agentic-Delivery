@@ -171,6 +171,8 @@ const BASE_CSS = `
   .fctl button { border:1px solid var(--border); background:#fff; color:var(--weak); width:1.25rem; height:1.25rem; line-height:1; border-radius:.2rem; cursor:pointer; font-size:.72rem; padding:0; }
   .fctl button:hover { background:#f4f6f9; color:var(--brand-dark); }
   .fitem.removed { display:none; }
+  .fitem.noted { background:#fffbe6; box-shadow:inset 3px 0 0 var(--warn); padding-left:.4rem; border-radius:.15rem; }
+  .fitem .note-chip { display:block; font-size:.72rem; color:#8a6d00; margin-top:.15rem; font-style:italic; }
   /* feedback log */
   .fb-actions { display:flex; gap:.4rem; margin-bottom:.6rem; flex-wrap:wrap; }
   .fb-h { font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; color:var(--weak); font-weight:700; margin:.7rem 0 .3rem; }
@@ -287,7 +289,7 @@ function renderDetails(screen: PrototypeScreen): string {
     return `<p class="asm-empty">No fields specified for this view.</p>`;
   }
   const values = screen.fieldValues ?? {};
-  const ctl = `<div class="fctl"><button type="button" data-fc="up" title="Move up">↑</button><button type="button" data-fc="down" title="Move down">↓</button><button type="button" data-fc="remove" title="Remove">×</button></div>`;
+  const ctl = `<div class="fctl"><button type="button" data-fc="up" title="Move up">↑</button><button type="button" data-fc="down" title="Move down">↓</button><button type="button" data-fc="note" title="Add note">✎</button><button type="button" data-fc="remove" title="Remove">×</button></div>`;
   const items = screen.fields
     .map((f) => {
       const label = prettyLabel(f);
@@ -359,25 +361,29 @@ ${body}
   <aside class="drawer fb-drawer" aria-label="Feedback and changes">
     <div class="dwr-hd"><h2>Feedback &amp; changes</h2><button class="dwr-x" type="button" data-close="fb">×</button></div>
     <div class="dwr-list">
-      <div class="fb-actions"><button class="btn btn-brand" type="button" id="fb-dl">Download feedback</button><button class="btn" type="button" id="fb-reset">Reset</button></div>
-      <p class="asm-empty">Reorder or remove fields on the page (hover a field → ↑ ↓ ×), and confirm/correct assumptions. Everything is tracked here and downloadable.</p>
+      <div class="fb-actions"><button class="btn btn-brand" type="button" id="fb-dl">Download feedback</button><button class="btn" type="button" id="fb-note">Add note</button><button class="btn" type="button" id="fb-reset">Reset</button></div>
+      <p class="asm-empty">Hover a field to reorder (↑ ↓), remove (×), or note (✎); confirm/correct assumptions; add screen notes. Everything is tracked here, downloadable, and fed back into the next version.</p>
+      <div class="fb-h">Notes</div><div id="fb-notes"></div>
       <div class="fb-h">Field changes</div><div id="fb-fieldlog"></div>
       <div class="fb-h">Assumption verdicts</div><div id="fb-verdicts"></div>
     </div>
   </aside>`;
 }
 
-/** The in-page interactivity: editable fields, verdict capture, change log, export. */
+/** The in-page interactivity: editable fields, verdict capture, notes, change log, export. */
 function interactivityScript(sowRef: string, screenName: string): string {
   return `<script>
 (function(){
   var SOW=${JSON.stringify(sowRef)}, SCREEN=${JSON.stringify(screenName)};
   var KEY="sowship-fb:"+SOW+":"+SCREEN;
-  function blank(){ return {fieldLog:[],verdicts:{},order:null,removed:[]}; }
+  function blank(){ return {fieldLog:[],verdicts:{},order:null,removed:[],notes:[]}; }
   var fb; try{ fb=JSON.parse(localStorage.getItem(KEY))||blank(); }catch(e){ fb=blank(); }
-  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(fb)); }catch(e){} renderPanel(); }
+  if(!fb.notes) fb.notes=[];
   function when(){ return new Date().toLocaleString(); }
   function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
+  function cssq(s){ return '.fitem[data-field="'+(s||"").replace(/"/g,'\\\\"')+'"]'; }
+  function payload(){ return {sowRef:SOW,screen:SCREEN,capturedAt:when(),notes:fb.notes,fieldChanges:fb.fieldLog,fieldOrder:fb.order,removedFields:fb.removed,assumptionVerdicts:Object.keys(fb.verdicts).map(function(id){var v=fb.verdicts[id];return {assumptionId:id,verdict:v.verdict,correction:v.correction};})}; }
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(fb)); }catch(e){} renderPanel(); try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:"sowship-feedback",feedback:payload()},"*"); }catch(e){} }
 
   // drawers
   document.querySelectorAll("[data-drawer]").forEach(function(b){ b.addEventListener("click",function(){ document.body.classList.toggle(b.getAttribute("data-drawer")+"-open"); }); });
@@ -388,6 +394,8 @@ function interactivityScript(sowRef: string, screenName: string): string {
   function items(){ return grid?Array.prototype.slice.call(grid.querySelectorAll(".fitem")):[]; }
   function recordOrder(){ fb.order=items().filter(function(el){return !el.classList.contains("removed");}).map(function(el){return el.getAttribute("data-field");}); }
   function logField(name,action){ fb.fieldLog.push({field:name,action:action,at:when()}); }
+  function addNote(target,text){ fb.notes.push({target:target,text:text,at:when()}); }
+  function markNoted(item,text){ item.classList.add("noted"); var chip=document.createElement("span"); chip.className="note-chip"; chip.textContent="✎ "+text; item.appendChild(chip); }
   if(grid){
     grid.addEventListener("click",function(e){
       var btn=e.target.closest("[data-fc]"); if(!btn) return;
@@ -395,14 +403,19 @@ function interactivityScript(sowRef: string, screenName: string): string {
       if(act==="up"){ var p=item.previousElementSibling; while(p&&p.classList.contains("removed"))p=p.previousElementSibling; if(p){grid.insertBefore(item,p);logField(name,"moved up");} }
       else if(act==="down"){ var n=item.nextElementSibling; while(n&&n.classList.contains("removed"))n=n.nextElementSibling; if(n){grid.insertBefore(n,item);logField(name,"moved down");} }
       else if(act==="remove"){ item.classList.add("removed"); fb.removed=fb.removed||[]; if(fb.removed.indexOf(name)<0)fb.removed.push(name); logField(name,"removed"); }
+      else if(act==="note"){ var t=window.prompt('Note on "'+name+'":'); if(t&&t.trim()){ addNote(name,t.trim()); markNoted(item,t.trim()); } else { return; } }
       recordOrder(); save();
     });
   }
   function applyState(){
     if(!grid) return;
-    if(fb.order){ fb.order.forEach(function(name){ var el=grid.querySelector('.fitem[data-field="'+(name||"").replace(/"/g,'\\\\"')+'"]'); if(el)grid.appendChild(el); }); }
-    (fb.removed||[]).forEach(function(name){ var el=grid.querySelector('.fitem[data-field="'+(name||"").replace(/"/g,'\\\\"')+'"]'); if(el)el.classList.add("removed"); });
+    if(fb.order){ fb.order.forEach(function(name){ var el=grid.querySelector(cssq(name)); if(el)grid.appendChild(el); }); }
+    (fb.removed||[]).forEach(function(name){ var el=grid.querySelector(cssq(name)); if(el)el.classList.add("removed"); });
+    (fb.notes||[]).forEach(function(n){ if(!n.target||n.target==="(screen)")return; var el=grid.querySelector(cssq(n.target)); if(el)markNoted(el,n.text); });
   }
+
+  // screen-level note
+  var nb=document.getElementById("fb-note"); if(nb) nb.addEventListener("click",function(){ var t=window.prompt("Note about this screen:"); if(t&&t.trim()){ addNote("(screen)",t.trim()); save(); } });
 
   // verdicts
   function paint(card,v){ card.classList.toggle("confirmed",v.verdict==="confirm"); var s=card.querySelector(".asm-verdict"); if(!s)return; s.style.display="block"; s.className="asm-verdict "+(v.verdict==="confirm"?"ok":"corr"); s.textContent=v.verdict==="confirm"?"✓ Confirmed":"✎ Correct: "+v.correction; }
@@ -417,22 +430,24 @@ function interactivityScript(sowRef: string, screenName: string): string {
 
   // panel + counts
   function renderPanel(){
-    var fl=document.getElementById("fb-fieldlog"), vl=document.getElementById("fb-verdicts"), cnt=document.getElementById("fb-count");
+    var nl=document.getElementById("fb-notes"), fl=document.getElementById("fb-fieldlog"), vl=document.getElementById("fb-verdicts"), cnt=document.getElementById("fb-count");
+    if(nl) nl.innerHTML=fb.notes.length?fb.notes.slice().reverse().map(function(n){return '<div class="fb-entry"><strong>'+esc(n.target)+'</strong> — '+esc(n.text)+' <span style="color:#999">'+esc(n.at)+'</span></div>';}).join(""):'<div class="fb-empty">No notes yet. Use ✎ on a field or “Add note”.</div>';
     if(fl) fl.innerHTML=fb.fieldLog.length?fb.fieldLog.slice().reverse().map(function(e){return '<div class="fb-entry"><strong>'+esc(e.field)+'</strong> — '+esc(e.action)+' <span style="color:#999">'+esc(e.at)+'</span></div>';}).join(""):'<div class="fb-empty">No field changes yet.</div>';
     var vk=Object.keys(fb.verdicts);
     if(vl) vl.innerHTML=vk.length?vk.map(function(id){var v=fb.verdicts[id];return '<div class="fb-entry"><strong>'+esc(id)+'</strong> — '+(v.verdict==="confirm"?"confirmed":"correct: "+esc(v.correction))+'</div>';}).join(""):'<div class="fb-empty">No assumption verdicts yet.</div>';
-    if(cnt) cnt.textContent="("+(fb.fieldLog.length+vk.length)+")";
+    if(cnt) cnt.textContent="("+(fb.notes.length+fb.fieldLog.length+vk.length)+")";
   }
 
   // export + reset
   var dl=document.getElementById("fb-dl"); if(dl) dl.addEventListener("click",function(){
-    var payload={sowRef:SOW,screen:SCREEN,capturedAt:when(),fieldChanges:fb.fieldLog,fieldOrder:fb.order,removedFields:fb.removed,assumptionVerdicts:Object.keys(fb.verdicts).map(function(id){var v=fb.verdicts[id];return {assumptionId:id,verdict:v.verdict,correction:v.correction};})};
-    var blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    var blob=new Blob([JSON.stringify(payload(),null,2)],{type:"application/json"});
     var url=URL.createObjectURL(blob), a=document.createElement("a"); a.href=url; a.download="feedback-"+SCREEN.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"")+".json"; a.click(); URL.revokeObjectURL(url);
   });
   var rs=document.getElementById("fb-reset"); if(rs) rs.addEventListener("click",function(){ if(window.confirm("Clear all feedback for this screen?")){ fb=blank(); save(); location.reload(); } });
 
   applyState(); renderPanel();
+  // announce initial state to the parent app (for the regenerate-with-feedback loop)
+  try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:"sowship-feedback",feedback:payload()},"*"); }catch(e){}
 })();
 </script>`;
 }
