@@ -119,6 +119,11 @@ async function runStage<S extends z.ZodTypeAny>(
 
 /* ----------------------------------------- prototype-stage shapes (loose contracts) */
 
+// Prototype cell value: the layout agent naturally emits nulls (empty fields) and
+// numbers (amounts/counts) as well as strings. The renderer coerces all of these
+// to display text, so accept them here rather than failing the (cosmetic) layout.
+const Cell = z.union([z.string(), z.number(), z.boolean()]).nullable();
+
 const ScreenInventory = z.object({
   screens: z.array(
     z.object({
@@ -127,14 +132,14 @@ const ScreenInventory = z.object({
       storyIds: z.array(z.string()).default([]),
       objects: z.array(z.string()).default([]),
       fields: z.array(z.string()).default([]),
-      fieldValues: z.record(z.string()).optional(),
-      highlights: z.array(z.object({ label: z.string(), value: z.string() })).optional(),
+      fieldValues: z.record(Cell).optional(),
+      highlights: z.array(z.object({ label: z.string(), value: Cell })).optional(),
       relatedLists: z
         .array(
           z.object({
             title: z.string(),
             columns: z.array(z.string()),
-            rows: z.array(z.array(z.string())),
+            rows: z.array(z.array(Cell)),
           }),
         )
         .optional(),

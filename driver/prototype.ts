@@ -10,10 +10,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+/** A display cell from the layout agent — may arrive as a string, number, or null. */
+export type Cell = string | number | boolean | null | undefined;
+
 export interface PrototypeRelatedList {
   title: string;
   columns: string[];
-  rows: string[][];
+  rows: Cell[][];
 }
 
 export interface PrototypeScreen {
@@ -26,9 +29,9 @@ export interface PrototypeScreen {
   /** Record-detail field labels. */
   fields: string[];
   /** Sample values per field label (so the page reads as real data, not "—"). */
-  fieldValues?: Record<string, string>;
+  fieldValues?: Record<string, Cell>;
   /** Key facts shown as a highlights strip under the header. */
-  highlights?: { label: string; value: string }[];
+  highlights?: { label: string; value: Cell }[];
   /** Related-list tables (financial accounts, goals, activity, …). */
   relatedLists?: PrototypeRelatedList[];
   interactions: string[];
@@ -118,8 +121,8 @@ export function slug(s: string): string {
     .replace(/(^-|-$)/g, "");
 }
 
-export function escapeHtml(s: string): string {
-  return s
+export function escapeHtml(s: unknown): string {
+  return String(s ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -183,7 +186,8 @@ function renderFields(screen: PrototypeScreen): string {
   return screen.fields
     .map((f) => {
       const v = values[f];
-      const control = v
+      const has = v !== null && v !== undefined && v !== "";
+      const control = has
         ? `<span class="field-value">${escapeHtml(v)}</span>`
         : `<span class="slds-text-color_weak">—</span>`;
       return `            <div class="slds-form-element slds-form-element_readonly slds-form-element_horizontal">
