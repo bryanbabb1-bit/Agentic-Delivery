@@ -15,6 +15,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize, resolve, sep } from "node:path";
 import { runIntake } from "./intake-service.js";
+import { extractText } from "./extract.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const runsRoot = join(here, ".runs");
@@ -32,10 +33,14 @@ function send(res: import("node:http").ServerResponse, status: number, body: str
   res.end(body);
 }
 
-async function readBody(req: import("node:http").IncomingMessage): Promise<string> {
+async function readBodyBuffer(req: import("node:http").IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
-  return Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks);
+}
+
+async function readBody(req: import("node:http").IncomingMessage): Promise<string> {
+  return (await readBodyBuffer(req)).toString("utf8");
 }
 
 /** Serve a file from runsRoot, rejecting any path that escapes it. */
@@ -61,6 +66,20 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/") {
       const html = await readFile(join(here, "index.html"));
       return send(res, 200, html, CONTENT_TYPES[".html"]);
+    }
+
+    // Upload a SOW file (PDF / Word / text) → extracted, cleaned text.
+    if (req.method === "POST" && url.pathname === "/api/extract") {
+      const filename = String(req.headers["x-filename"] ?? "upload.txt");
+      const buf = await readBodyBuffer(req);
+      if (buf.length === 0) return send(res, 400, JSON.stringify({ error: "Empty file." }), "application/json");
+      const sowText = await extractText(buf, filename);
+      const sowRef = filename
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^A-Za-z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 48);
+      return send(res, 200, JSON.stringify({ sowText, sowRef }), "application/json");
     }
 
     if (req.method === "GET" && url.pathname === "/api/example") {
