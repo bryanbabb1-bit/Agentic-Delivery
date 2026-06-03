@@ -12,8 +12,10 @@ Each epic is an `Epic` object with **all** of these required fields:
 - **id** — a stable identifier in the form `EP-01`, `EP-02`, … (sequential, unique).
 - **title** — a short epic name (e.g. "Client 360").
 - **sowItemId** — the SowItem it traces back to (every epic must trace to one).
-- **personas** — at least one of the canonical set (Advisor, ClientService,
-  Compliance, Operations, SystemAdmin, SolutionArchitect).
+- **personas** — at least one of the canonical set. **Prefer the real business
+  end-users who benefit** (`Advisor`, `ClientService`, `Compliance`,
+  `Operations`); use `SystemAdmin`/`SolutionArchitect` only for genuinely
+  admin/technical epics. Name who *gets value*, not who *does the config*.
 - **acceptanceTheme** — the one-line outcome that defines "done" for the epic.
 
 Keep epics buildable-sized; split sprawling SOW items rather than overstuffing a

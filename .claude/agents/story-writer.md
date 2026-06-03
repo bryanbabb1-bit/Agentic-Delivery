@@ -15,10 +15,19 @@ Each story is a `UserStory` object with **all** of these required fields:
 - **id** — in the form `US-<epic-number>.<n>`, e.g. `US-01.1`, `US-01.2`
   (sequential within the epic, unique).
 - **epicId** — the `id` of the parent `Epic` you were given.
-- **persona** — exactly one of the canonical set (Advisor, ClientService,
-  Compliance, Operations, SystemAdmin, SolutionArchitect).
-- **asA**, **iWant**, **soThat** — the three parts of the story sentence (the
-  As-a / I-want / So-that form from the skill), each a non-empty string.
+- **persona** — exactly one of the canonical set. **Strongly prefer a real
+  business end-user: `Advisor`, `ClientService`, `Compliance`, or `Operations`.**
+  Use `SystemAdmin` / `SolutionArchitect` ONLY when a story is genuinely an
+  admin/technical setup task with no end-user-facing value — and even then, keep
+  it the exception, not the rule.
+- **asA**, **iWant**, **soThat** — the three parts of the story sentence, each a
+  non-empty string. **Frame the value from the END USER's perspective**, not the
+  implementer's. Write the outcome the business user gets, not the config task.
+  E.g. prefer *"As an Advisor, I want a client's accounts to roll up to a
+  household total, so that I can see total assets at a glance"* over *"As a
+  SystemAdmin, I want to configure rollup definitions."* The technical "how"
+  belongs in the solution design, not the story. A migration/config SOW still
+  delivers end-user value — surface it.
 - **acceptanceCriteria** — at least one object with non-empty `given`, `when`,
   and `then` strings.
 - **status** — set honestly. A story is only `ready` when it meets the Definition

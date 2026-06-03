@@ -13,6 +13,9 @@
     .badge { background:var(--warn); color:#2b2826; border-radius:.25rem; padding:.1rem .5rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; font-weight:700; }
     .wrap { display:flex; gap:1rem; padding:1rem; align-items:flex-start; flex-wrap:wrap; }
     .col { flex:1 1 380px; min-width:320px; }
+    /* Submit stays compact on the left; results take the full width below it. */
+    .col.submit { flex:0 1 360px; }
+    .col.results { flex:1 1 100%; }
     .card { background:#fff; border:1px solid var(--border); border-radius:.25rem; margin-bottom:1rem; }
     .card h2 { font-size:.9rem; margin:0; padding:.7rem 1rem; border-bottom:1px solid #e5e5e5; }
     .card .body { padding:1rem; }
@@ -34,7 +37,7 @@
     .pill { font-size:.66rem; text-transform:uppercase; border-radius:.25rem; padding:.08rem .45rem; background:#ecebea; }
     .pill.warn { background:var(--warn); color:#2b2826; }
     .pill.ok { background:#2e844a; color:#fff; }
-    iframe { width:100%; height:640px; border:1px solid var(--border); border-radius:.25rem; background:#fff; }
+    iframe { width:100%; height:82vh; min-height:560px; border:1px solid var(--border); border-radius:.25rem; background:#fff; }
     .tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.5rem; }
     .tabs button { background:#fff; color:var(--brand); padding:.35rem .7rem; font-size:.8rem; }
     .tabs button.active { background:var(--brand); color:#fff; }
@@ -83,7 +86,7 @@
   </header>
 
   <div class="wrap">
-    <div class="col">
+    <div class="col submit">
       <div class="card">
         <h2>Submit a SOW</h2>
         <div class="body">
@@ -105,7 +108,7 @@
       </div>
     </div>
 
-    <div class="col" id="results" style="flex: 1 1 560px;">
+    <div class="col results" id="results">
       <div class="card hidden" id="progressCard">
         <h2>Pipeline progress</h2>
         <div class="body"><ul id="progressList" class="steps"></ul></div>
@@ -115,7 +118,7 @@
         <div class="body" id="summary"><p class="note">No package yet — submit a SOW to generate one.</p></div>
       </div>
       <div class="card hidden" id="contentsCard">
-        <h2>Epics &amp; user stories <button class="secondary" id="dlMd" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;">Download .md</button><button class="secondary" id="dlJson" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">Download .json</button></h2>
+        <h2>Epics &amp; user stories <button class="secondary" id="dlMd" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;">Download .md</button><button class="secondary" id="dlJson" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">Download .json</button><button class="secondary" id="dlCsv" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">Stories → Excel</button></h2>
         <div class="body" id="contents"></div>
       </div>
       <div class="card hidden" id="asmCard">
@@ -123,7 +126,7 @@
         <div class="body" id="assumptions"></div>
       </div>
       <div class="card hidden" id="protoCard">
-        <h2>Prototype (clickable v1)</h2>
+        <h2>Prototype (clickable v1) <a id="protoOpen" href="#" target="_blank" rel="noopener" style="float:right;font-size:.78rem;font-weight:400;">Open full screen ↗</a></h2>
         <div class="body">
           <div class="tabs" id="protoTabs"></div>
           <iframe id="protoFrame" title="prototype"></iframe>
@@ -344,8 +347,22 @@
       a.href = url; a.download = name; a.click();
       URL.revokeObjectURL(url);
     }
+    function csvCell(s) { return '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"'; }
+    function buildStoriesCsv(data) {
+      const pkg = data.result.deliverable, sp = pkg.storyPackages || [], et = {};
+      (pkg.epics || []).forEach((e) => { et[e.id] = e.title; });
+      const head = ["Epic ID", "Epic", "Story ID", "Persona", "As a", "I want", "So that", "Status", "Acceptance Criteria", "Automation", "Components", "Blocking Flags"];
+      const rows = sp.map((p) => {
+        const s = p.story, sd = p.solutionDesign;
+        const ac = (s.acceptanceCriteria || []).map((c) => `Given ${c.given} When ${c.when} Then ${c.then}`).join(" | ");
+        const comps = sd ? (sd.components || []).map((c) => `${c.action} ${c.type}:${c.apiName}`).join("; ") : "";
+        return [s.epicId, et[s.epicId] || "", s.id, s.persona, s.asA, s.iWant, s.soThat, s.status, ac, sd ? sd.automation : "", comps, (s.blockingFlags || []).join("; ")].map(csvCell).join(",");
+      });
+      return "﻿" + [head.map(csvCell).join(","), ...rows].join("\r\n"); // BOM → Excel reads UTF-8
+    }
     $("dlJson").addEventListener("click", () => { if (lastResult) downloadBlob(`${lastResult.sowRef || "package"}.json`, JSON.stringify(lastResult.result, null, 2), "application/json"); });
     $("dlMd").addEventListener("click", () => { if (lastResult) downloadBlob(`${lastResult.sowRef || "package"}.md`, buildMarkdown(lastResult), "text/markdown"); });
+    $("dlCsv").addEventListener("click", () => { if (lastResult) downloadBlob(`${lastResult.sowRef || "stories"}-stories.csv`, buildStoriesCsv(lastResult), "text/csv;charset=utf-8"); });
 
     function render(data) {
       lastResult = data;
@@ -382,6 +399,7 @@
       $("protoCard").classList.toggle("hidden", protos.length === 0);
       const tabs = $("protoTabs");
       tabs.innerHTML = "";
+      const show = (file) => { const u = `/runs/${data.runId}/${file}`; $("protoFrame").src = u; $("protoOpen").href = u; };
       protos.forEach((p, i) => {
         const b = document.createElement("button");
         b.textContent = p.title;
@@ -389,11 +407,11 @@
         b.onclick = () => {
           [...tabs.children].forEach((c) => c.classList.remove("active"));
           b.classList.add("active");
-          $("protoFrame").src = `/runs/${data.runId}/${p.file}`;
+          show(p.file);
         };
         tabs.appendChild(b);
       });
-      if (protos.length) $("protoFrame").src = `/runs/${data.runId}/${protos[0].file}`;
+      if (protos.length) show(protos[0].file);
     }
   </script>
 </body>
