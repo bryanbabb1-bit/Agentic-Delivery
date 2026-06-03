@@ -59,9 +59,12 @@ its required fields:
    **`automation`** (one of `config`, `validation_rule`, `flow`, `apex`,
    `omnistudio`, `mixed`). **`components`** is an array of **objects** (never bare
    strings), each `{ "type", "apiName", "action" }` where `type` is one of
-   `object`, `field`, `record_type`, `flow`, `apex_class`, `apex_test`, `lwc`,
-   `permission_set`, `action_plan_template`, `rollup`, `page_layout`; `apiName` is
-   the metadata API name; and `action` is one of `create`, `modify`, `reuse`.
+   `object`, `field`, `record_type`, `validation_rule`, `flow`, `apex_class`,
+   `apex_test`, `lwc`, `omniscript`, `permission_set`, `permission_set_group`,
+   `sharing_rule`, `action_plan_template`, `rollup`, `page_layout`, `flexipage`,
+   `compact_layout`, `quick_action`; `apiName` is the metadata API name; and
+   `action` is one of `create`, `modify`, `reuse`. (For an automation *style* like
+   a validation rule vs Flow vs Apex, also reflect it in `automation`.)
    Also include a `testApproach` tied to the ACs. If your design reveals a
    blocker, capture it in the **`assumptions`** register (`blocking: true`, with
    the story's id in `relatedStoryIds`).

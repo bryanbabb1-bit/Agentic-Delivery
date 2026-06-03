@@ -110,14 +110,21 @@ export const MetadataType = z.enum([
   "object",
   "field",
   "record_type",
+  "validation_rule",
   "flow",
   "apex_class",
   "apex_test",
   "lwc",
+  "omniscript",
   "permission_set",
+  "permission_set_group",
+  "sharing_rule",
   "action_plan_template",
   "rollup",
   "page_layout",
+  "flexipage",
+  "compact_layout",
+  "quick_action",
 ]);
 
 /**
