@@ -14,7 +14,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize, resolve, sep } from "node:path";
-import { runIntake } from "./intake-service.js";
+import { runIntake, isLiveMode } from "./intake-service.js";
 import { extractText } from "./extract.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -80,6 +80,10 @@ const server = createServer(async (req, res) => {
         .replace(/^-+|-+$/g, "")
         .slice(0, 48);
       return send(res, 200, JSON.stringify({ sowText, sowRef }), "application/json");
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/mode") {
+      return send(res, 200, JSON.stringify({ mode: isLiveMode() ? "live" : "demo" }), "application/json");
     }
 
     if (req.method === "GET" && url.pathname === "/api/example") {

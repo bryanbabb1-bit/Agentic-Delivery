@@ -133,6 +133,17 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
 
+    // Reflect the real server mode in the badge on load (not just after a run).
+    (async () => {
+      try {
+        const m = await (await fetch("/api/mode")).json();
+        const badge = $("mode");
+        badge.textContent = m.mode + " mode";
+        badge.style.background = m.mode === "live" ? "#2e844a" : "var(--warn)";
+        badge.style.color = m.mode === "live" ? "#fff" : "#2b2826";
+      } catch (e) { /* leave default */ }
+    })();
+
     $("loadExample").addEventListener("click", async () => {
       const r = await fetch("/api/example");
       const j = await r.json();
