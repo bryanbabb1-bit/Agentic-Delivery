@@ -2,7 +2,7 @@
  * prototype.test.ts — the HTML/SLDS generator (pure rendering, no I/O).
  */
 import { describe, it, expect } from "vitest";
-import { renderPrototype, slug, escapeHtml, type RenderOptions } from "./prototype.js";
+import { renderPrototype, slug, escapeHtml, prettyLabel, type RenderOptions } from "./prototype.js";
 
 const opts: RenderOptions = {
   sowRef: "ZEN-SBH-CLIENT360",
@@ -60,9 +60,10 @@ describe("renderPrototype", () => {
     expect(screen.html).toContain("slds-tabs_default");
   });
 
-  it("renders the assumption panel, flagging blocking assumptions", () => {
+  it("renders the assumptions in an off-canvas drawer (not on the layout), flagging blocking ones", () => {
     const screen = files.find((f) => f.filename === "client-360-profile.html")!;
     expect(screen.html).toContain("Assumptions in this view");
+    expect(screen.html).toContain("asm-drawer"); // off-canvas, not inline in the layout
     expect(screen.html).toContain('data-assumption-id="ASM-01"');
     expect(screen.html).toContain("slds-theme_warning"); // blocking badge
     expect(screen.html).toContain("Confirm");
@@ -75,10 +76,19 @@ describe("renderPrototype", () => {
     expect(funding.html).toContain("No open assumptions for this view.");
   });
 
-  it("renders the screen's fields", () => {
+  it("renders the screen's fields with friendly (de-API-ified) labels", () => {
     const screen = files.find((f) => f.filename === "client-360-profile.html")!;
-    expect(screen.html).toContain("PersonEmail");
+    expect(screen.html).toContain("Person Email"); // PersonEmail -> friendly label
     expect(screen.html).toContain("Financial Goals");
+  });
+});
+
+describe("prettyLabel", () => {
+  it("de-API-ifies field names the way Lightning shows them", () => {
+    expect(prettyLabel("FinServ__Balance__c")).toBe("Balance");
+    expect(prettyLabel("IsPersonAccount")).toBe("Is Person Account");
+    expect(prettyLabel("PersonEmail")).toBe("Person Email");
+    expect(prettyLabel("Account Name")).toBe("Account Name");
   });
 });
 

@@ -48,22 +48,36 @@ If a story needs behavior beyond a component's native capability, that's an
 A smaller, honest inventory of standard screens that passes the fidelity
 guardrail beats a rich one that over-promises.
 
+**Write field labels the way a USER sees them in Lightning — never API names.**
+The screen renders as a real Lightning record page, so use the friendly display
+label, not the API name: "Email" not `PersonEmail`, "Balance" not
+`FinServ__Balance__c`, "Account Name" not `Name`, "Record Type" not
+`RecordTypeId`. Put API names only in the `objects` list (the data-source note),
+never in `fields`/`highlights`/`relatedLists` column headers.
+
 Output a single JSON object of the exact shape `{ "screens": [ ... ] }`. Each
 screen object uses these exact field names:
-- **name** (required) — the screen title (e.g. "Client 360 — Jordan Rivera").
+- **name** (required) — the screen/record title (e.g. "Jordan Rivera" or
+  "Client 360 — Jordan Rivera").
+- **objectLabel** — the friendly object name shown above the title (e.g.
+  "Person Account", "Financial Account", "Action Plan").
+- **actions** — header action buttons a user would see (e.g. `["Edit", "New Case",
+  "Clone"]`). The first is styled as the primary.
 - **storyIds** — the `id`s of the stories this screen covers.
 - **objects** — the Salesforce objects it surfaces (e.g. `Account`,
-  `FinServ__FinancialAccount__c`).
-- **fields** — the fields shown (each must have a home in the design's data
-  model; if it doesn't, that's a gap to flag, not a field to invent).
+  `FinServ__FinancialAccount__c`) — for the data-source note only.
+- **fields** — the record-detail fields shown, as **friendly labels**.
 - **interactions** — the key navigation/actions it implies.
 
-For a richer, more realistic v1, also include where they apply: **subtitle**,
-**fieldValues** (a map of field → sample value), **highlights** (`[{label,
-value}]` for the header), and **relatedLists**. Each related list is
-`{ "title", "columns": [strings], "rows": [[strings]] }` where **each row is an
-array of cell strings positionally matching `columns`** — rows are arrays, NOT
-objects (e.g. `"rows": [["Checking ••4021", "Checking", "$12,500"]]`).
+For a richer, more realistic v1, also include where they apply: **subtitle**
+(context line, e.g. "Person Account · Mass Affluent · Client since 2018"),
+**fieldValues** (a map of field label → realistic sample value), **highlights**
+(`[{label, value}]` — the key facts in the record header), and **relatedLists**.
+Each related list is `{ "title", "columns": [friendly labels], "rows":
+[[strings]] }` where **each row is an array of cell strings positionally matching
+`columns`** — rows are arrays, NOT objects (e.g. `"rows": [["Checking ••4021",
+"Checking", "$12,500"]]`). Populate realistic sample data (named people, dollar
+amounts, dates) so the page reads like a real client's record, not a template.
 Keep the inventory to what the stories actually need — this is the v1 the client
 reacts to, not an exhaustive app map.
 

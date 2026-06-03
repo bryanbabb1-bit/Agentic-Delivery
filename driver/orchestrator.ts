@@ -126,6 +126,8 @@ const ScreenInventory = z.object({
     z.object({
       name: z.string(),
       subtitle: z.string().optional(),
+      objectLabel: z.string().optional(), // friendly object name for the header chip
+      actions: z.array(z.string()).default([]), // header action buttons (Edit, New Case, …)
       storyIds: z.array(z.string()).default([]),
       objects: z.array(z.string()).default([]),
       fields: z.array(z.string()).default([]),
