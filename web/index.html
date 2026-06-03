@@ -48,6 +48,9 @@
     .steps .lbl { flex:1; }
     .steps .dt { color:var(--weak); font-size:.74rem; }
     .steps li.pending { color:#b0b0b0; }
+    .steps li.skipped { color:#a9a7a4; }
+    .steps li.skipped .ic { color:#c9c7c4; }
+    .steps li.skipped .dt { font-style:italic; }
     .steps li.active .ic { color:var(--brand); }
     .steps li.active { font-weight:600; }
     .steps li.done .ic { color:#2e844a; }
@@ -133,10 +136,13 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
 
+    let serverMode = "demo"; // live web = front half only (build/qa/handoff are Phase 2)
+
     // Reflect the real server mode in the badge on load (not just after a run).
     (async () => {
       try {
         const m = await (await fetch("/api/mode")).json();
+        serverMode = m.mode;
         const badge = $("mode");
         badge.textContent = m.mode + " mode";
         badge.style.background = m.mode === "live" ? "#2e844a" : "var(--warn)";
@@ -190,14 +196,21 @@
     };
     const STAGE_ORDER = Object.keys(STAGE_LABELS);
 
+    // Grounded build → QA → handoff only run in the full pipeline (a connected
+    // Salesforce org). In live/plan mode they're deliberately skipped — show that.
+    const PHASE2_STAGES = ["build", "qa", "handoff"];
     function seedProgress() {
       const ul = $("progressList");
       ul.innerHTML = "";
+      const planOnly = serverMode === "live"; // live web = front half only (no org)
       for (const stage of STAGE_ORDER) {
         const li = document.createElement("li");
         li.id = "st-" + stage;
-        li.className = "pending";
-        li.innerHTML = `<span class="ic">○</span><span class="lbl">${esc(STAGE_LABELS[stage])}</span><span class="dt"></span>`;
+        const skipped = planOnly && PHASE2_STAGES.includes(stage);
+        li.className = skipped ? "skipped" : "pending";
+        const icon = skipped ? "⊘" : "○";
+        const dt = skipped ? "Phase 2 — needs connected Salesforce org" : "";
+        li.innerHTML = `<span class="ic">${icon}</span><span class="lbl">${esc(STAGE_LABELS[stage])}</span><span class="dt">${dt}</span>`;
         ul.appendChild(li);
       }
       $("progressCard").classList.remove("hidden");
@@ -354,7 +367,8 @@
           ${metric("Mockups", pkg.mockups.length)}
           ${handoff ? metric("Boundaries", handoff.knownBoundaries.length) : metric("Phase", "plan")}
         </div>
-        <p class="note" style="margin-top:.75rem;">SOW <strong>${esc(data.sowRef)}</strong> · reconcile diff: ${data.result.reconciled.changes.length} change(s), ${data.result.reconciled.scopeDeltas.length} scope delta(s)${handoff ? " · handoff: UAT-ready" : " · plan phase (no grounded build)"}.</p>`;
+        <p class="note" style="margin-top:.75rem;">SOW <strong>${esc(data.sowRef)}</strong> · reconcile diff: ${data.result.reconciled.changes.length} change(s), ${data.result.reconciled.scopeDeltas.length} scope delta(s)${handoff ? " · handoff: UAT-ready" : ""}.</p>
+        ${handoff ? "" : '<p class="note" style="margin-top:.4rem;padding:.5rem .6rem;background:#f3f6fb;border-left:3px solid #1589ee;border-radius:.2rem;">✓ <strong>Plan &amp; prototype complete</strong> (Phase 1 — no Salesforce org needed). The grounded <strong>Build → QA → Handoff</strong> stages run in <strong>Phase 2</strong> against a connected scratch org — intentionally not run here.</p>'}`;
 
       const asms = data.result.assumptions || [];
       $("asmCard").classList.toggle("hidden", asms.length === 0);
