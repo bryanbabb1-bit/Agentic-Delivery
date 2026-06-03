@@ -74,6 +74,32 @@ const server = createServer(async (req, res) => {
       return send(res, 200, JSON.stringify(out), "application/json");
     }
 
+    // Streaming intake: emits one NDJSON line per progress event, then a final
+    // {type:"result"} (or {type:"error"}) line. The live connection keeps long
+    // runs from timing out AND feeds the browser's per-agent progress view.
+    if (req.method === "POST" && url.pathname === "/api/intake-stream") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      res.writeHead(200, {
+        "content-type": "application/x-ndjson; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        "x-accel-buffering": "no", // disable proxy buffering so events flush live
+        connection: "keep-alive",
+      });
+      const line = (obj: unknown) => res.write(JSON.stringify(obj) + "\n");
+      try {
+        const out = await runIntake({
+          sowText: String(body.sowText ?? ""),
+          sowRef: body.sowRef,
+          runsRoot,
+          progress: { report: (e) => { line({ type: "progress", event: e }); } },
+        });
+        line({ type: "result", result: out });
+      } catch (err) {
+        line({ type: "error", message: err instanceof Error ? err.message : String(err) });
+      }
+      return res.end();
+    }
+
     if (req.method === "GET" && url.pathname.startsWith("/runs/")) {
       return serveRunFile(res, url.pathname);
     }

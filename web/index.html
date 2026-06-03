@@ -41,6 +41,20 @@
     .hidden { display:none; }
     .err { color:#ba0517; font-size:.85rem; }
     a { color:var(--brand); }
+    .steps { list-style:none; margin:0; padding:0; }
+    .steps li { display:flex; align-items:center; gap:.55rem; padding:.32rem 0; font-size:.85rem; border-bottom:1px solid #f0f0f0; }
+    .steps li:last-child { border-bottom:0; }
+    .steps .ic { width:1.1rem; text-align:center; font-weight:700; }
+    .steps .lbl { flex:1; }
+    .steps .dt { color:var(--weak); font-size:.74rem; }
+    .steps li.pending { color:#b0b0b0; }
+    .steps li.active .ic { color:var(--brand); }
+    .steps li.active { font-weight:600; }
+    .steps li.done .ic { color:#2e844a; }
+    .steps li.blocked .ic { color:#ba0517; }
+    .steps li.blocked { color:#ba0517; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .steps li.active .ic { display:inline-block; animation:spin 1s linear infinite; }
   </style>
 </head>
 <body>
@@ -70,6 +84,10 @@
     </div>
 
     <div class="col" id="results" style="flex: 1 1 560px;">
+      <div class="card hidden" id="progressCard">
+        <h2>Pipeline progress</h2>
+        <div class="body"><ul id="progressList" class="steps"></ul></div>
+      </div>
       <div class="card">
         <h2>Deliverable package</h2>
         <div class="body" id="summary"><p class="note">No package yet — submit a SOW to generate one.</p></div>
@@ -99,6 +117,43 @@
       $("sowRef").value = j.sowRef;
     });
 
+    // The pipeline stages, in order, with friendly labels. The checklist seeds
+    // these as "pending" and lights each up as progress events stream in.
+    const STAGE_LABELS = {
+      parse: "Parse SOW", plan: "Plan epics", stories: "Write user stories",
+      design: "Solution design", layout: "Screen layout", prototype: "Render prototype",
+      fidelity: "Fidelity check", walkthrough: "Demo script", discovery: "Discovery loop",
+      reconcile: "Reconcile", build: "Grounded build", qa: "QA", handoff: "Handoff",
+    };
+    const STAGE_ORDER = Object.keys(STAGE_LABELS);
+
+    function seedProgress() {
+      const ul = $("progressList");
+      ul.innerHTML = "";
+      for (const stage of STAGE_ORDER) {
+        const li = document.createElement("li");
+        li.id = "st-" + stage;
+        li.className = "pending";
+        li.innerHTML = `<span class="ic">○</span><span class="lbl">${esc(STAGE_LABELS[stage])}</span><span class="dt"></span>`;
+        ul.appendChild(li);
+      }
+      $("progressCard").classList.remove("hidden");
+    }
+
+    function updateProgress(e) {
+      const li = $("st-" + e.stage);
+      if (!li) return;
+      const ic = li.querySelector(".ic"), dt = li.querySelector(".dt");
+      if (e.detail) dt.textContent = e.detail;
+      if (e.kind === "gate") {
+        if (e.status === "blocked") { li.className = "blocked"; ic.textContent = "✗"; dt.textContent = "gate blocked" + (e.detail ? " — " + e.detail : ""); }
+        return; // gate pass/start doesn't change the row's main state
+      }
+      if (e.status === "start") { li.className = "active"; ic.textContent = "◐"; }
+      else if (e.status === "done") { li.className = "done"; ic.textContent = "✓"; }
+      else if (e.status === "blocked") { li.className = "blocked"; ic.textContent = "✗"; }
+    }
+
     $("generate").addEventListener("click", async () => {
       const sowText = $("sowText").value;
       const sowRef = $("sowRef").value;
@@ -106,15 +161,32 @@
       if (!sowText.trim()) { showError("Paste some SOW text first."); return; }
       $("generate").disabled = true;
       $("generate").textContent = "Generating…";
+      seedProgress();
       try {
-        const r = await fetch("/api/intake", {
+        const r = await fetch("/api/intake-stream", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ sowText, sowRef }),
         });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || "Generation failed");
-        render(data);
+        if (!r.ok || !r.body) throw new Error("Generation failed to start");
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let nl;
+          while ((nl = buf.indexOf("\n")) >= 0) {
+            const lineStr = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (!lineStr) continue;
+            const msg = JSON.parse(lineStr);
+            if (msg.type === "progress") updateProgress(msg.event);
+            else if (msg.type === "result") render(msg.result);
+            else if (msg.type === "error") throw new Error(msg.message);
+          }
+        }
       } catch (e) {
         showError(e.message);
       } finally {

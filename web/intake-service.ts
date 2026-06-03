@@ -24,6 +24,7 @@ import {
   AutoConfirmDiscovery,
   AutoApproveHumanGate,
   type PipelineDeps,
+  type ProgressReporter,
 } from "../driver/runner.js";
 import { makeFixtures } from "../examples/zennify-client360/fixtures.js";
 
@@ -39,6 +40,8 @@ export interface IntakeRequest {
   sowText: string;
   sowRef?: string;
   runsRoot: string;
+  /** Optional: receives per-agent progress events as the pipeline runs. */
+  progress?: ProgressReporter;
 }
 
 export interface PrototypeRef {
@@ -90,9 +93,11 @@ export async function runIntake(req: IntakeRequest): Promise<IntakeResult> {
   const runInput = { sowRef, sowText: req.sowText, prototypeOut: { dir: outDir } };
 
   // Live = real agents, front half only (no org). Demo = full pipeline via fixtures.
+  const deps = live ? liveDeps(process.cwd()) : demoDeps();
+  if (req.progress) deps.progress = req.progress;
   const result = live
-    ? await runPlanPhase(runInput, liveDeps(process.cwd()))
-    : await run(runInput, demoDeps());
+    ? await runPlanPhase(runInput, deps)
+    : await run(runInput, deps);
 
   // The driver renders prototypes into outDir in both demo and live mode;
   // tolerate a missing dir defensively.
