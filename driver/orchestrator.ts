@@ -180,10 +180,15 @@ const DesignerOutput = z.object({
 // reconciler emits ONLY the diff (audit trail + scope deltas), NOT the whole
 // package — the orchestrator already holds the v1 package and assembles v2 from
 // it. Echoing a 40-story package back was the fragile part that broke extraction.
-const ReconcilerDiff = z.object({
-  changes: z.array(ChangeItem).default([]),
-  scopeDeltas: z.array(ScopeDelta).default([]),
-});
+// Tolerant of how the model expresses "nothing changed": a bare array is read as
+// the changes list (so `[]` => an empty diff), null/anything-else => empty diff.
+const ReconcilerDiff = z.preprocess(
+  (v) => (Array.isArray(v) ? { changes: v } : v && typeof v === "object" ? v : {}),
+  z.object({
+    changes: z.array(ChangeItem).default([]),
+    scopeDeltas: z.array(ScopeDelta).default([]),
+  }),
+);
 
 /* ---------------------------------------------------------------------- gates */
 
