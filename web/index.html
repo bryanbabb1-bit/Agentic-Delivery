@@ -83,10 +83,11 @@
   <header>
     <h1>SOW → Ship · Intake</h1>
     <span class="badge" id="mode">demo mode</span>
+    <button id="newSow" class="hidden" type="button" style="margin-left:auto;background:#fff;color:#032d60;border:0;border-radius:.25rem;padding:.3rem .7rem;font-size:.78rem;font-weight:600;cursor:pointer;">+ New SOW</button>
   </header>
 
   <div class="wrap">
-    <div class="col submit">
+    <div class="col submit" id="submitCol">
       <div class="card">
         <h2>Submit a SOW</h2>
         <div class="body">
@@ -129,7 +130,7 @@
         <div class="body" id="summary"><p class="note">No package yet — submit a SOW to generate one.</p></div>
       </div>
       <div class="card hidden" id="contentsCard">
-        <h2>Epics &amp; user stories <button class="secondary" id="dlMd" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;">Download .md</button><button class="secondary" id="dlJson" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">Download .json</button><button class="secondary" id="dlCsv" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">Stories → Excel</button></h2>
+        <h2>Epics &amp; user stories <button id="dlZip" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;">Package .zip</button><button class="secondary" id="dlMd" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">.md</button><button class="secondary" id="dlJson" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">.json</button><button class="secondary" id="dlCsv" type="button" style="float:right;font-size:.72rem;padding:.25rem .6rem;margin-right:.4rem;">Stories → Excel</button></h2>
         <div class="body" id="contents"></div>
       </div>
       <div class="card hidden" id="asmCard">
@@ -343,6 +344,12 @@
       finally { $("regen").disabled = false; $("regen").textContent = "Regenerate v2 with feedback"; }
     });
 
+    $("newSow").addEventListener("click", () => {
+      $("submitCol").classList.remove("hidden");
+      $("newSow").classList.add("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
     function showError(msg) { const el = $("error"); el.textContent = msg; el.classList.remove("hidden"); }
 
     let lastResult = null; // for downloads
@@ -424,6 +431,53 @@
       });
       return "﻿" + [head.map(csvCell).join(","), ...rows].join("\r\n"); // BOM → Excel reads UTF-8
     }
+    // Minimal store-only ZIP writer (no deps) so the whole hand-off bundles in one file.
+    function crc32(bytes) {
+      if (!crc32.t) { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; } crc32.t = t; }
+      const t = crc32.t; let crc = -1;
+      for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ t[(crc ^ bytes[i]) & 0xFF];
+      return (crc ^ -1) >>> 0;
+    }
+    function makeZip(files) {
+      const enc = new TextEncoder();
+      const u16 = (v) => { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, v & 0xFFFF, true); return b; };
+      const u32 = (v) => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, v >>> 0, true); return b; };
+      const parts = [], central = []; let offset = 0;
+      for (const f of files) {
+        const name = enc.encode(f.name);
+        const data = typeof f.data === "string" ? enc.encode(f.data) : f.data;
+        const crc = crc32(data), start = offset;
+        const lh = [u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0), name, data];
+        for (const p of lh) { parts.push(p); offset += p.length; }
+        central.push([u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(start), name]);
+      }
+      const cd = []; let cdSize = 0; const cdStart = offset;
+      for (const ch of central) for (const p of ch) { cd.push(p); cdSize += p.length; }
+      const eocd = [u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(cdSize), u32(cdStart), u16(0)];
+      const all = [...parts, ...cd, ...eocd];
+      let total = 0; for (const p of all) total += p.length;
+      const out = new Uint8Array(total); let o = 0; for (const p of all) { out.set(p, o); o += p.length; }
+      return new Blob([out], { type: "application/zip" });
+    }
+    $("dlZip").addEventListener("click", async () => {
+      if (!lastResult) return;
+      const btn = $("dlZip"), orig = btn.textContent; btn.disabled = true; btn.textContent = "Zipping…";
+      try {
+        const files = [
+          { name: "package.json", data: JSON.stringify(lastResult.result, null, 2) },
+          { name: "package.md", data: buildMarkdown(lastResult) },
+          { name: "stories.csv", data: buildStoriesCsv(lastResult) },
+        ];
+        const fb = Object.values(feedbackByScreen).filter((f) => (f.notes || []).length || (f.fieldChanges || []).length || (f.assumptionVerdicts || []).length);
+        if (fb.length) files.push({ name: "feedback.json", data: JSON.stringify(fb, null, 2) });
+        for (const p of lastResult.prototypes || []) {
+          try { const t = await (await fetch(`/runs/${lastResult.runId}/${p.file}`)).text(); files.push({ name: "prototype/" + p.file, data: t }); } catch (e) {}
+        }
+        const url = URL.createObjectURL(makeZip(files));
+        const a = document.createElement("a"); a.href = url; a.download = `${lastResult.sowRef || "package"}.zip`; a.click(); URL.revokeObjectURL(url);
+      } catch (e) { showError("Zip failed: " + e.message); }
+      finally { btn.disabled = false; btn.textContent = orig; }
+    });
     $("dlJson").addEventListener("click", () => { if (lastResult) downloadBlob(`${lastResult.sowRef || "package"}.json`, JSON.stringify(lastResult.result, null, 2), "application/json"); });
     $("dlMd").addEventListener("click", () => { if (lastResult) downloadBlob(`${lastResult.sowRef || "package"}.md`, buildMarkdown(lastResult), "text/markdown"); });
     $("dlCsv").addEventListener("click", () => { if (lastResult) downloadBlob(`${lastResult.sowRef || "stories"}-stories.csv`, buildStoriesCsv(lastResult), "text/csv;charset=utf-8"); });
@@ -431,6 +485,8 @@
     function render(data) {
       lastResult = data;
       feedbackByScreen = {}; updateRegen(); // a new version supersedes prior feedback
+      $("submitCol").classList.add("hidden"); // collapse intake → artifacts own the space
+      $("newSow").classList.remove("hidden");
       const badge = $("mode");
       badge.textContent = data.mode + " mode";
       badge.style.background = data.mode === "live" ? "#2e844a" : "var(--warn)";
