@@ -13,25 +13,34 @@ Load the **fidelity-rubric** skill and score against its buildable-on-platform
 checklist. Be adversarial in *finding* issues (assume the prototype over-promises
 until proven otherwise), but be honest in *classifying* them:
 
-- **`kind: "over_promise"`** (this BLOCKS the gate) — the prototype presents
-  something as a **built, native, committed** deliverable that FSC cannot deliver
-  natively in scope. The prototype is effectively lying about what's buildable.
-  Examples: a custom object/dashboard/register rendered as a native screen; a
-  custom LWC/Apex component shown as finished; a security or data-isolation
-  guarantee depicted as a property of the page/layout; a field with no possible
-  home in the data model shown as populated.
+**The single discriminator is: is there a native FSC way to build this at all?**
 
-- **`kind: "open_assumption"`** (this does NOT block) — the element rests on an
-  unresolved question that **discovery is meant to resolve**, AND that question is
-  recorded in the assumption register (so it's surfaced in the assumption panel,
-  not presented as final/committed). The prototype is honestly showing a
-  contestable guess. Example: a standard field shown whose exact API name is
-  pending confirmation and is listed as an assumption.
+- **`kind: "over_promise"`** (this BLOCKS the gate) — there is **no native FSC
+  way to build this element within scope**, regardless of any assumption. No
+  standard object/component/feature exists for it, so rendering it as a finished
+  screen would require an unauthorized custom build. The prototype is inventing a
+  capability FSC doesn't have. Examples: a "setup verification checklist" /
+  "enablement status board" / "config audit" screen (no native equivalent); a
+  custom governance/metrics dashboard or a custom register rendered as a native
+  screen; a custom LWC/Apex component shown as finished; a security/data-isolation
+  *guarantee* depicted as a property of page assignment. A backing assumption does
+  NOT rescue these — they're unbuildable.
 
-Decision rule: if confirming/correcting an assumption that is **already in the
-register** is all that's needed, classify it `open_assumption`. If delivering it
-would require building something FSC can't do natively in scope, or it's
-presented as built/committed when it isn't, classify it `over_promise`.
+- **`kind: "open_assumption"`** (this does NOT block) — the element **IS natively
+  buildable in FSC** (a standard feature/object/component/field exists for it),
+  and the only open question — its enablement, exact values, or specifics — is
+  **recorded in the assumption register** (so the panel surfaces it as
+  contestable). Showing the best-guess end-state of a buildable thing is exactly
+  what the disposable strawman is for, even when the enabling decision is still a
+  *blocking* assumption. Examples: an enabled **Person Account** record (standard
+  FSC feature; enablement is a recorded blocking assumption); a **Custom Metadata**
+  record with illustrative sample values (the CMT is buildable; the values are a
+  recorded assumption); a standard field whose API name is pending confirmation.
+
+Decision rule: **Not natively buildable at all → `over_promise`. Natively
+buildable but resting on a recorded assumption → `open_assumption`.** Do not flag
+a buildable element as an over-promise merely because it's shown in a finished
+(but contestable, panel-backed) state — that is the strawman doing its job.
 
 Output JSON: `{ passes, violations: [{ element, reason, severity, kind }] }`.
 Set **`passes: true` when there are no `over_promise` violations** (open

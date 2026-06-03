@@ -23,7 +23,15 @@ built screens (they are open assumptions, not v1 deliverables):
 - **external-tool surfaces** the design says live outside Salesforce (e.g. a
   test/defect tracker in Jira/ADO),
 - governance/metrics dashboards, integration-status panels, custom registers, or
-  pages on an undecided host object.
+  pages on an undecided host object,
+- **invented admin/reference/setup screens with no native Salesforce home** — a
+  "setup verification checklist", "enablement status board", "config audit", or
+  "FSC feature flag" screen. There is no native screen for these; do not render
+  one. Convey setup/enablement work as an **assumption**, not a screen.
+
+A buildable record shown with best-guess data (e.g. an enabled Person Account, a
+standard object's record page) is fine and expected — that's the contestable
+strawman. The bar is *native buildability of the screen itself*, not certainty.
 A smaller, honest inventory of standard screens that passes the fidelity
 guardrail beats a rich one that over-promises.
 
