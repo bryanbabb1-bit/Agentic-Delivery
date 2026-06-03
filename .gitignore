@@ -29,3 +29,6 @@ hardening/
 
 # OS noise
 .DS_Store
+
+# Stress-test client SOWs (confidential)
+examples/_stress/

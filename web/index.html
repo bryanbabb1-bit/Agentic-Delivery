@@ -13,8 +13,8 @@
     .badge { background:var(--warn); color:#2b2826; border-radius:.25rem; padding:.1rem .5rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; font-weight:700; }
     .wrap { display:flex; gap:1rem; padding:1rem; align-items:flex-start; flex-wrap:wrap; }
     .col { flex:1 1 380px; min-width:320px; }
-    /* Submit stays compact on the left; results take the full width below it. */
-    .col.submit { flex:0 1 360px; }
+    /* Submit form: a centered, comfortably-sized card. Results take full width below. */
+    .col.submit { flex:1 1 100%; max-width:760px; margin:0 auto; }
     .col.results { flex:1 1 100%; }
     .card { background:#fff; border:1px solid var(--border); border-radius:.25rem; margin-bottom:1rem; }
     .card h2 { font-size:.9rem; margin:0; padding:.7rem 1rem; border-bottom:1px solid #e5e5e5; }
@@ -91,7 +91,6 @@
         <h2>Submit a SOW</h2>
         <div class="body">
           <p class="note">Drop in a signed SOW and receive a deliverable package — epics, stories, the assumption register, and a clickable prototype. You never touch an agent.</p>
-          <p class="note"><strong>Demo mode:</strong> outputs are the recorded Zennify Client-360 example regardless of input. Live generation activates once <code>SdkRunner</code> is wired.</p>
           <label for="sowRef">SOW reference</label>
           <input type="text" id="sowRef" placeholder="e.g. ZEN-SBH-CLIENT360" />
           <label for="sowText">SOW text</label>
