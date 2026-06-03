@@ -139,26 +139,43 @@ const BASE_CSS = `
   table.rl td:first-child { color:var(--brand-dark); }
   .data-source { color:var(--weak); font-size:.72rem; margin:.25rem 0 .5rem; }
 
-  /* Off-canvas assumptions drawer (hidden by default) */
-  .asm-toggle { position:absolute; left:-9999px; }
-  .asm-fab { position:fixed; right:1rem; bottom:1rem; z-index:30; background:var(--brand-dark); color:#fff; border-radius:2rem; padding:.55rem .95rem; font-size:.82rem; font-weight:600; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.25); }
-  .asm-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.25); opacity:0; visibility:hidden; transition:opacity .15s; z-index:31; }
-  .asm-drawer { position:fixed; top:0; right:0; height:100%; width:360px; max-width:88vw; background:#fff; box-shadow:-4px 0 16px rgba(0,0,0,.2); transform:translateX(100%); transition:transform .2s ease; z-index:32; display:flex; flex-direction:column; }
-  .asm-toggle:checked ~ .asm-backdrop { opacity:1; visibility:visible; }
-  .asm-toggle:checked ~ .asm-drawer { transform:translateX(0); }
-  .asm-hd { padding:.85rem 1rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-  .asm-hd h2 { font-size:.95rem; margin:0; }
-  .asm-x { cursor:pointer; color:var(--weak); font-size:1.2rem; line-height:1; }
-  .asm-list { padding:.75rem 1rem; overflow:auto; }
+  /* Off-canvas drawers (assumptions + feedback) — toggled via a body class by JS */
+  .fab { position:fixed; bottom:1rem; z-index:30; color:#fff; border:0; border-radius:2rem; padding:.55rem .95rem; font:inherit; font-size:.82rem; font-weight:600; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+  .fab.asm-fab { right:1rem; background:var(--brand-dark); }
+  .fab.fb-fab { right:12rem; background:#514f4d; }
+  .backdrop { position:fixed; inset:0; background:rgba(0,0,0,.25); opacity:0; visibility:hidden; transition:opacity .15s; z-index:31; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:370px; max-width:90vw; background:#fff; box-shadow:-4px 0 16px rgba(0,0,0,.2); transform:translateX(100%); transition:transform .2s ease; z-index:32; display:flex; flex-direction:column; }
+  body.asm-open .asm-drawer, body.fb-open .fb-drawer { transform:translateX(0); }
+  body.asm-open .asm-bd, body.fb-open .fb-bd { opacity:1; visibility:visible; }
+  .dwr-hd { padding:.85rem 1rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .dwr-hd h2 { font-size:.95rem; margin:0; }
+  .dwr-x { cursor:pointer; color:var(--weak); font-size:1.3rem; line-height:1; background:none; border:0; }
+  .dwr-list { padding:.75rem 1rem; overflow:auto; }
   .asm { border:1px solid var(--border); border-left:3px solid var(--brand); border-radius:.25rem; padding:.6rem; margin-bottom:.6rem; }
   .asm.blocking { border-left-color:var(--warn); }
+  .asm.confirmed { border-left-color:var(--success); }
   .asm-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:.25rem; gap:.5rem; }
   .asm-topic { font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; color:var(--weak); font-weight:700; }
   .badge { font-size:.62rem; text-transform:uppercase; border-radius:.25rem; padding:.08rem .4rem; background:#ecebea; color:#514f4d; white-space:nowrap; }
   .badge.warn { background:var(--warn); color:#2b2826; }
   .asm-stmt { font-size:.82rem; margin:.15rem 0 .5rem; }
   .asm-btns { display:flex; gap:.4rem; }
+  .asm-verdict { font-size:.7rem; font-weight:700; margin-top:.35rem; }
+  .asm-verdict.ok { color:var(--success); }
+  .asm-verdict.corr { color:var(--brand-dark); }
   .asm-empty { color:var(--weak); font-size:.85rem; }
+  /* inline field-edit controls (hover-revealed) */
+  .fitem { position:relative; }
+  .fctl { position:absolute; top:.15rem; right:0; display:flex; gap:.15rem; opacity:0; transition:opacity .12s; }
+  .fitem:hover .fctl { opacity:1; }
+  .fctl button { border:1px solid var(--border); background:#fff; color:var(--weak); width:1.25rem; height:1.25rem; line-height:1; border-radius:.2rem; cursor:pointer; font-size:.72rem; padding:0; }
+  .fctl button:hover { background:#f4f6f9; color:var(--brand-dark); }
+  .fitem.removed { display:none; }
+  /* feedback log */
+  .fb-actions { display:flex; gap:.4rem; margin-bottom:.6rem; flex-wrap:wrap; }
+  .fb-h { font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; color:var(--weak); font-weight:700; margin:.7rem 0 .3rem; }
+  .fb-entry { font-size:.78rem; padding:.3rem 0; border-bottom:1px solid var(--line); }
+  .fb-empty { color:var(--weak); font-size:.8rem; }
 `;
 
 export function slug(s: string): string {
@@ -270,12 +287,14 @@ function renderDetails(screen: PrototypeScreen): string {
     return `<p class="asm-empty">No fields specified for this view.</p>`;
   }
   const values = screen.fieldValues ?? {};
+  const ctl = `<div class="fctl"><button type="button" data-fc="up" title="Move up">↑</button><button type="button" data-fc="down" title="Move down">↓</button><button type="button" data-fc="remove" title="Remove">×</button></div>`;
   const items = screen.fields
     .map((f) => {
+      const label = prettyLabel(f);
       const raw = values[f];
       const text = cellText(raw);
       const value = text ? `<span>${escapeHtml(text)}</span>` : `<span class="empty">—</span>`;
-      return `      <div class="fitem"><div class="k">${escapeHtml(prettyLabel(f))}</div><div class="v">${value}</div></div>`;
+      return `      <div class="fitem" data-field="${escapeHtml(label)}">${ctl}<div class="k">${escapeHtml(label)}</div><div class="v">${value}</div></div>`;
     })
     .join("\n");
   return `    <div class="fgrid">
@@ -306,7 +325,7 @@ function renderRelatedLists(screen: PrototypeScreen): string {
     .join("\n");
 }
 
-function renderAssumptionDrawer(items: PrototypeAssumption[]): string {
+function renderDrawers(items: PrototypeAssumption[]): string {
   const body =
     items.length === 0
       ? `<p class="asm-empty">No open assumptions for this view.</p>`
@@ -322,24 +341,105 @@ function renderAssumptionDrawer(items: PrototypeAssumption[]): string {
           <button class="btn btn-brand" type="button" data-action="confirm">Confirm</button>
           <button class="btn" type="button" data-action="correct">Correct…</button>
         </div>
+        <div class="asm-verdict" style="display:none"></div>
       </div>`,
           )
           .join("\n");
   const count = items.length;
-  return `  <input type="checkbox" id="asm-toggle" class="asm-toggle" />
-  <label for="asm-toggle" class="asm-fab">⚑ Assumptions${count ? ` (${count})` : ""}</label>
-  <label for="asm-toggle" class="asm-backdrop"></label>
-  <aside class="asm-drawer" aria-label="Assumptions in this view">
-    <div class="asm-hd"><h2>Assumptions in this view</h2><label for="asm-toggle" class="asm-x">×</label></div>
-    <div class="asm-list">
+  return `  <button class="fab asm-fab" type="button" data-drawer="asm">⚑ Assumptions${count ? ` (${count})` : ""}</button>
+  <button class="fab fb-fab" type="button" data-drawer="fb">📝 Feedback <span id="fb-count">(0)</span></button>
+  <div class="backdrop asm-bd" data-close="asm"></div>
+  <aside class="drawer asm-drawer" aria-label="Assumptions in this view">
+    <div class="dwr-hd"><h2>Assumptions in this view</h2><button class="dwr-x" type="button" data-close="asm">×</button></div>
+    <div class="dwr-list">
 ${body}
+    </div>
+  </aside>
+  <div class="backdrop fb-bd" data-close="fb"></div>
+  <aside class="drawer fb-drawer" aria-label="Feedback and changes">
+    <div class="dwr-hd"><h2>Feedback &amp; changes</h2><button class="dwr-x" type="button" data-close="fb">×</button></div>
+    <div class="dwr-list">
+      <div class="fb-actions"><button class="btn btn-brand" type="button" id="fb-dl">Download feedback</button><button class="btn" type="button" id="fb-reset">Reset</button></div>
+      <p class="asm-empty">Reorder or remove fields on the page (hover a field → ↑ ↓ ×), and confirm/correct assumptions. Everything is tracked here and downloadable.</p>
+      <div class="fb-h">Field changes</div><div id="fb-fieldlog"></div>
+      <div class="fb-h">Assumption verdicts</div><div id="fb-verdicts"></div>
     </div>
   </aside>`;
 }
 
+/** The in-page interactivity: editable fields, verdict capture, change log, export. */
+function interactivityScript(sowRef: string, screenName: string): string {
+  return `<script>
+(function(){
+  var SOW=${JSON.stringify(sowRef)}, SCREEN=${JSON.stringify(screenName)};
+  var KEY="sowship-fb:"+SOW+":"+SCREEN;
+  function blank(){ return {fieldLog:[],verdicts:{},order:null,removed:[]}; }
+  var fb; try{ fb=JSON.parse(localStorage.getItem(KEY))||blank(); }catch(e){ fb=blank(); }
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(fb)); }catch(e){} renderPanel(); }
+  function when(){ return new Date().toLocaleString(); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
+
+  // drawers
+  document.querySelectorAll("[data-drawer]").forEach(function(b){ b.addEventListener("click",function(){ document.body.classList.toggle(b.getAttribute("data-drawer")+"-open"); }); });
+  document.querySelectorAll("[data-close]").forEach(function(b){ b.addEventListener("click",function(){ document.body.classList.remove(b.getAttribute("data-close")+"-open"); }); });
+
+  // fields
+  var grid=document.querySelector(".fgrid");
+  function items(){ return grid?Array.prototype.slice.call(grid.querySelectorAll(".fitem")):[]; }
+  function recordOrder(){ fb.order=items().filter(function(el){return !el.classList.contains("removed");}).map(function(el){return el.getAttribute("data-field");}); }
+  function logField(name,action){ fb.fieldLog.push({field:name,action:action,at:when()}); }
+  if(grid){
+    grid.addEventListener("click",function(e){
+      var btn=e.target.closest("[data-fc]"); if(!btn) return;
+      var item=btn.closest(".fitem"), name=item.getAttribute("data-field"), act=btn.getAttribute("data-fc");
+      if(act==="up"){ var p=item.previousElementSibling; while(p&&p.classList.contains("removed"))p=p.previousElementSibling; if(p){grid.insertBefore(item,p);logField(name,"moved up");} }
+      else if(act==="down"){ var n=item.nextElementSibling; while(n&&n.classList.contains("removed"))n=n.nextElementSibling; if(n){grid.insertBefore(n,item);logField(name,"moved down");} }
+      else if(act==="remove"){ item.classList.add("removed"); fb.removed=fb.removed||[]; if(fb.removed.indexOf(name)<0)fb.removed.push(name); logField(name,"removed"); }
+      recordOrder(); save();
+    });
+  }
+  function applyState(){
+    if(!grid) return;
+    if(fb.order){ fb.order.forEach(function(name){ var el=grid.querySelector('.fitem[data-field="'+(name||"").replace(/"/g,'\\\\"')+'"]'); if(el)grid.appendChild(el); }); }
+    (fb.removed||[]).forEach(function(name){ var el=grid.querySelector('.fitem[data-field="'+(name||"").replace(/"/g,'\\\\"')+'"]'); if(el)el.classList.add("removed"); });
+  }
+
+  // verdicts
+  function paint(card,v){ card.classList.toggle("confirmed",v.verdict==="confirm"); var s=card.querySelector(".asm-verdict"); if(!s)return; s.style.display="block"; s.className="asm-verdict "+(v.verdict==="confirm"?"ok":"corr"); s.textContent=v.verdict==="confirm"?"✓ Confirmed":"✎ Correct: "+v.correction; }
+  document.querySelectorAll(".asm").forEach(function(card){
+    var id=card.getAttribute("data-assumption-id");
+    card.addEventListener("click",function(e){ var btn=e.target.closest("[data-action]"); if(!btn)return; var act=btn.getAttribute("data-action");
+      if(act==="confirm"){ fb.verdicts[id]={verdict:"confirm"}; paint(card,fb.verdicts[id]); save(); }
+      else if(act==="correct"){ var c=window.prompt("What should it be instead?"); if(c!=null&&c.trim()!==""){ fb.verdicts[id]={verdict:"correct",correction:c.trim()}; paint(card,fb.verdicts[id]); save(); } }
+    });
+    if(fb.verdicts[id]) paint(card,fb.verdicts[id]);
+  });
+
+  // panel + counts
+  function renderPanel(){
+    var fl=document.getElementById("fb-fieldlog"), vl=document.getElementById("fb-verdicts"), cnt=document.getElementById("fb-count");
+    if(fl) fl.innerHTML=fb.fieldLog.length?fb.fieldLog.slice().reverse().map(function(e){return '<div class="fb-entry"><strong>'+esc(e.field)+'</strong> — '+esc(e.action)+' <span style="color:#999">'+esc(e.at)+'</span></div>';}).join(""):'<div class="fb-empty">No field changes yet.</div>';
+    var vk=Object.keys(fb.verdicts);
+    if(vl) vl.innerHTML=vk.length?vk.map(function(id){var v=fb.verdicts[id];return '<div class="fb-entry"><strong>'+esc(id)+'</strong> — '+(v.verdict==="confirm"?"confirmed":"correct: "+esc(v.correction))+'</div>';}).join(""):'<div class="fb-empty">No assumption verdicts yet.</div>';
+    if(cnt) cnt.textContent="("+(fb.fieldLog.length+vk.length)+")";
+  }
+
+  // export + reset
+  var dl=document.getElementById("fb-dl"); if(dl) dl.addEventListener("click",function(){
+    var payload={sowRef:SOW,screen:SCREEN,capturedAt:when(),fieldChanges:fb.fieldLog,fieldOrder:fb.order,removedFields:fb.removed,assumptionVerdicts:Object.keys(fb.verdicts).map(function(id){var v=fb.verdicts[id];return {assumptionId:id,verdict:v.verdict,correction:v.correction};})};
+    var blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    var url=URL.createObjectURL(blob), a=document.createElement("a"); a.href=url; a.download="feedback-"+SCREEN.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"")+".json"; a.click(); URL.revokeObjectURL(url);
+  });
+  var rs=document.getElementById("fb-reset"); if(rs) rs.addEventListener("click",function(){ if(window.confirm("Clear all feedback for this screen?")){ fb=blank(); save(); location.reload(); } });
+
+  applyState(); renderPanel();
+})();
+</script>`;
+}
+
 function renderScreen(opts: RenderOptions, screen: PrototypeScreen): PrototypeFile {
   const filename = `${slug(screen.name)}.html`;
-  const drawer = renderAssumptionDrawer(assumptionsForScreen(screen, opts.assumptions));
+  const drawer = renderDrawers(assumptionsForScreen(screen, opts.assumptions));
   const subtitle = screen.subtitle ? `<p class="data-source">${escapeHtml(screen.subtitle)}</p>` : "";
   const dataSource = `<p class="data-source">Data source: ${escapeHtml(screen.objects.map(prettyLabel).join(", ") || "—")} · stories ${escapeHtml(screen.storyIds.join(", ") || "—")}</p>`;
   const related = renderRelatedLists(screen);
@@ -376,6 +476,7 @@ ${related || '        <article class="slds-card"><div class="card-hd">Related</d
     </div>
   </div>
 ${drawer}
+${interactivityScript(opts.sowRef, screen.name)}
 </body>
 </html>
 `;

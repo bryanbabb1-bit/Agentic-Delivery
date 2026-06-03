@@ -207,10 +207,17 @@
     }
 
     $("generate").addEventListener("click", async () => {
-      const sowText = $("sowText").value;
-      const sowRef = $("sowRef").value;
+      let sowText = $("sowText").value;
+      let sowRef = $("sowRef").value;
       $("error").classList.add("hidden");
-      if (!sowText.trim()) { showError("Paste some SOW text first."); return; }
+      // No SOW provided → fall back to the bundled example (one-click in demo).
+      if (!sowText.trim()) {
+        try {
+          const ex = await (await fetch("/api/example")).json();
+          sowText = ex.sowText; if (!sowRef) sowRef = ex.sowRef;
+          $("sowText").value = sowText; $("sowRef").value = sowRef;
+        } catch (e) { showError("Paste a SOW, or upload one, to generate."); return; }
+      }
       $("generate").disabled = true;
       $("generate").textContent = "Generating…";
       seedProgress();
