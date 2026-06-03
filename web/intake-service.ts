@@ -71,7 +71,10 @@ function demoDeps(): PipelineDeps {
  */
 function liveDeps(cwd: string): PipelineDeps {
   return {
-    runner: new SdkRunner({ cwd }),
+    // Web live mode runs the plan phase only (no org), so disable MCP — the
+    // designer grounds from the SOW + fsc-patterns instead of spawning an
+    // unauthenticated Salesforce DX MCP. Mirrors the CLI --plan-only path.
+    runner: new SdkRunner({ cwd, disableMcp: true }),
     discovery: new AutoConfirmDiscovery(),
     humanGate: new AutoApproveHumanGate(),
   };
