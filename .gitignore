@@ -16,6 +16,10 @@ web/.runs/
 # Local intake CLI run output (npm run intake -- ... --out live-run-*.json)
 live-run-*.json
 
+# Real/confidential client SOWs — never commit. Keep the toy example only.
+examples/zennify-sbh/
+examples/**/*.real.txt
+
 # Local env / secrets
 .env
 .env.local

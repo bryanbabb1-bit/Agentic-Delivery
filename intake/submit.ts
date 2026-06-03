@@ -9,7 +9,7 @@
  *   npm run intake -- <path/to/sow.txt> [--ref SOW-REF] [--out deliverable.json]
  */
 import { readFile, writeFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { run, runPlanPhase } from "../driver/orchestrator.js";
 import {
   AutoConfirmDiscovery,
@@ -25,6 +25,7 @@ Usage:
 Options:
   --ref <id>     SOW reference id (default: derived from the filename)
   --out <file>   where to write the DeliverablePackage JSON (default: stdout)
+  --prototypes <dir>  where to render the clickable prototype (default: prototypes/<ref>)
   --plan-only    run only the front half (parse → … → reconcile + prototype);
                  no Salesforce org / DX MCP required
   --auto         auto-confirm discovery + auto-approve human gates (unattended
@@ -38,6 +39,7 @@ interface Args {
   sowFile?: string;
   ref?: string;
   out?: string;
+  prototypes?: string;
   auto: boolean;
   planOnly: boolean;
   help: boolean;
@@ -52,6 +54,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--plan-only") args.planOnly = true;
     else if (a === "--ref") args.ref = argv[++i];
     else if (a === "--out") args.out = argv[++i];
+    else if (a === "--prototypes") args.prototypes = argv[++i];
     else if (a && !a.startsWith("-")) args.sowFile ??= a;
   }
   return args;
@@ -74,9 +77,14 @@ async function main(): Promise<void> {
   // The front half needs no Salesforce org, so run it with MCP disabled — the
   // designer grounds from the SOW + fsc-patterns skill instead of a live org.
   if (args.planOnly) deps.runner = new SdkRunner({ disableMcp: true });
+
+  // Render the clickable prototype into ./prototypes/<sowRef>/ (override with --prototypes).
+  const protoDir = args.prototypes ?? join("prototypes", sowRef);
+  const runInput = { sowRef, sowText, prototypeOut: { dir: protoDir } };
+
   const result = args.planOnly
-    ? await runPlanPhase({ sowRef, sowText }, deps)
-    : await run({ sowRef, sowText }, deps);
+    ? await runPlanPhase(runInput, deps)
+    : await run(runInput, deps);
   const json = JSON.stringify(result.deliverable, null, 2);
 
   if (args.out) {
@@ -85,6 +93,7 @@ async function main(): Promise<void> {
   } else {
     console.log(json);
   }
+  console.log(`Prototype rendered to ${join(protoDir, "index.html")}`);
 }
 
 main().catch((err) => {
