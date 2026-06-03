@@ -95,6 +95,15 @@
           <input type="text" id="sowRef" placeholder="e.g. ZEN-SBH-CLIENT360" />
           <label for="sowText">SOW text</label>
           <textarea id="sowText" placeholder="Paste the SOW scope here…"></textarea>
+          <details style="margin-top:.6rem;">
+            <summary style="cursor:pointer;font-size:.8rem;color:var(--weak);">+ Add discovery / sales context (optional)</summary>
+            <p class="note" style="margin-top:.4rem;">Slide decks, meeting notes, client artifacts — used to ground personas, assumptions, and realistic data. <strong>The SOW stays the source of truth for scope</strong>; this only supports it.</p>
+            <textarea id="contextText" placeholder="Paste discovery notes… or add files below" style="min-height:110px;"></textarea>
+            <div class="row" style="margin-top:.4rem;">
+              <button class="secondary" id="ctxUploadBtn" type="button">Add context file(s)…</button>
+              <input type="file" id="ctxFileInput" accept=".pdf,.docx,.pptx,.txt,.md" multiple class="hidden" />
+            </div>
+          </details>
           <div class="row">
             <button id="generate">Generate package</button>
             <button class="secondary" id="uploadBtn" type="button">Upload PDF / Word…</button>
@@ -157,6 +166,26 @@
       const j = await r.json();
       $("sowText").value = j.sowText;
       $("sowRef").value = j.sowRef;
+    });
+
+    // Context files (decks/notes) → extracted text appended to the context box.
+    $("ctxUploadBtn").addEventListener("click", () => $("ctxFileInput").click());
+    $("ctxFileInput").addEventListener("change", async (e) => {
+      const files = [...e.target.files];
+      if (!files.length) return;
+      const btn = $("ctxUploadBtn"), orig = btn.textContent;
+      btn.disabled = true; btn.textContent = "Extracting…";
+      try {
+        for (const file of files) {
+          const buf = await file.arrayBuffer();
+          const r = await fetch("/api/extract", { method: "POST", headers: { "x-filename": file.name }, body: buf });
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.error || "Extraction failed");
+          const cur = $("contextText").value;
+          $("contextText").value = (cur ? cur + "\n\n" : "") + `=== ${file.name} ===\n` + j.sowText;
+        }
+      } catch (err) { showError("Couldn't read a context file: " + err.message); }
+      finally { btn.disabled = false; btn.textContent = orig; $("ctxFileInput").value = ""; }
     });
 
     $("uploadBtn").addEventListener("click", () => $("fileInput").click());
@@ -249,7 +278,7 @@
         const r = await fetch("/api/intake-stream", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sowText, sowRef }),
+          body: JSON.stringify({ sowText, sowRef, context: $("contextText").value || undefined }),
         });
         if (!r.ok || !r.body) throw new Error("Generation failed to start");
         const reader = r.body.getReader();

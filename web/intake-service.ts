@@ -40,6 +40,8 @@ export interface IntakeRequest {
   sowText: string;
   sowRef?: string;
   runsRoot: string;
+  /** Optional supporting sales/discovery context (grounding, NOT scope). */
+  context?: string;
   /** Optional: receives per-agent progress events as the pipeline runs. */
   progress?: ProgressReporter;
 }
@@ -90,7 +92,7 @@ export async function runIntake(req: IntakeRequest): Promise<IntakeResult> {
   const outDir = join(req.runsRoot, runId);
   const sowRef = req.sowRef?.trim() || `INTAKE-${runId.slice(0, 8)}`;
   const live = isLiveMode();
-  const runInput = { sowRef, sowText: req.sowText, prototypeOut: { dir: outDir } };
+  const runInput = { sowRef, sowText: req.sowText, context: req.context, prototypeOut: { dir: outDir } };
 
   // Live = real agents, front half only (no org). Demo = full pipeline via fixtures.
   const deps = live ? liveDeps(process.cwd()) : demoDeps();

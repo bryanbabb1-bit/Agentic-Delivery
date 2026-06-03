@@ -28,6 +28,12 @@ For each item, decide:
 - **Never fabricate a requirement to fill a gap.** If the SOW is silent on a
   detail, record it as an `assumption` or a `flag` on an existing item — do not
   invent a new scope item, object, dashboard, or workflow the SOW never named.
+- **Supporting context is grounding, not scope.** If sales/discovery context is
+  provided above, use it to enrich descriptions, assumptions, and flags — but
+  **scope ONLY from the SOW.** If the context describes work the SOW does not
+  include (pitched but not contracted), do NOT add it as a buildable item; record
+  it as a `flag` like "discussed in discovery, not in SOW scope" on the most
+  related item (or omit it). The SOW is what we committed to deliver.
 
 Output a JSON array of `SowItem` (see `driver/contracts.ts`).
 

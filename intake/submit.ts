@@ -27,6 +27,7 @@ Options:
   --ref <id>     SOW reference id (default: derived from the filename)
   --out <file>   where to write the DeliverablePackage JSON (default: stdout)
   --prototypes <dir>  where to render the clickable prototype (default: prototypes/<ref>)
+  --context <file>   supporting sales/discovery text (grounding, NOT scope)
   --plan-only    run only the front half (parse → … → reconcile + prototype);
                  no Salesforce org / DX MCP required
   --auto         auto-confirm discovery + auto-approve human gates (unattended
@@ -41,6 +42,7 @@ interface Args {
   ref?: string;
   out?: string;
   prototypes?: string;
+  context?: string;
   auto: boolean;
   planOnly: boolean;
   help: boolean;
@@ -56,6 +58,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--ref") args.ref = argv[++i];
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--prototypes") args.prototypes = argv[++i];
+    else if (a === "--context") args.context = argv[++i];
     else if (a && !a.startsWith("-")) args.sowFile ??= a;
   }
   return args;
@@ -71,6 +74,7 @@ async function main(): Promise<void> {
 
   const sowText = await readFile(args.sowFile, "utf8");
   const sowRef = args.ref ?? basename(args.sowFile).replace(/\.[^.]+$/, "");
+  const context = args.context ? await readFile(args.context, "utf8") : undefined;
 
   const deps: Record<string, unknown> = args.auto
     ? { discovery: new AutoConfirmDiscovery(), humanGate: new AutoApproveHumanGate() }
@@ -83,7 +87,7 @@ async function main(): Promise<void> {
 
   // Render the clickable prototype into ./prototypes/<sowRef>/ (override with --prototypes).
   const protoDir = args.prototypes ?? join("prototypes", sowRef);
-  const runInput = { sowRef, sowText, prototypeOut: { dir: protoDir } };
+  const runInput = { sowRef, sowText, context, prototypeOut: { dir: protoDir } };
 
   const result = args.planOnly
     ? await runPlanPhase(runInput, deps)

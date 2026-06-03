@@ -30,6 +30,20 @@ def extract_docx(path: str) -> str:
     return html.unescape(xml)
 
 
+def extract_pptx(path: str) -> str:
+    # A .pptx is a zip; slide text lives in ppt/slides/slideN.xml as <a:t> runs.
+    out = []
+    with zipfile.ZipFile(path) as z:
+        slides = [n for n in z.namelist() if re.match(r"ppt/slides/slide\d+\.xml$", n)]
+        slides.sort(key=lambda n: int(re.search(r"(\d+)", n).group(1)))
+        for i, n in enumerate(slides, 1):
+            xml = z.read(n).decode("utf-8", errors="replace")
+            runs = [html.unescape(t) for t in re.findall(r"<a:t>(.*?)</a:t>", xml, re.S)]
+            if runs:
+                out.append(f"[Slide {i}] " + " ".join(runs))
+    return "\n".join(out)
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         sys.stderr.write("usage: extract.py <file>\n")
@@ -41,6 +55,8 @@ def main() -> int:
             out = extract_pdf(path)
         elif ext == "docx":
             out = extract_docx(path)
+        elif ext == "pptx":
+            out = extract_pptx(path)
         else:  # txt, md, anything else — read as text
             with open(path, encoding="utf-8", errors="replace") as f:
                 out = f.read()

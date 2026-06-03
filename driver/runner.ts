@@ -18,7 +18,8 @@ import { loadMcpServers, mcpServerName, type McpServerMap } from "./mcp-config.j
 
 /** Invokes a Claude Code subagent and returns the JSON it emits. */
 export interface SubagentRunner {
-  run(agent: string, input: unknown): Promise<unknown>;
+  /** `context` is optional supporting sales/discovery grounding (NOT scope). */
+  run(agent: string, input: unknown, context?: string): Promise<unknown>;
 }
 
 /** Collects the client's confirm/correct verdicts for a discovery agenda. */
@@ -56,6 +57,8 @@ export interface PipelineDeps {
   humanGate: HumanGate;
   /** Optional: receives a ProgressEvent at every stage boundary. */
   progress?: ProgressReporter;
+  /** Optional supporting sales/discovery context (grounding, NOT scope). */
+  context?: string;
 }
 
 /* --------------------------------------------------- production seams (default) */
@@ -100,7 +103,7 @@ const TOOL_AGENT_MAX_TURNS = 16;
 export class SdkRunner implements SubagentRunner {
   constructor(private readonly opts: SdkRunnerOptions = {}) {}
 
-  async run(agent: string, input: unknown): Promise<unknown> {
+  async run(agent: string, input: unknown, context?: string): Promise<unknown> {
     if (!process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
       throw new Error(
         `SdkRunner needs Anthropic credentials (set ANTHROPIC_API_KEY) to run agent '${agent}' live.`,
@@ -118,8 +121,18 @@ export class SdkRunner implements SubagentRunner {
     const mcpServers =
       wantsMcp && !this.opts.disableMcp ? await this.selectMcpServers(def.tools) : undefined;
 
+    // Supporting sales/discovery context is prepended as grounding — with a hard
+    // reminder that the SOW (in the stage input) is the source of truth for SCOPE.
+    const ctxBlock = context && context.trim()
+      ? `## Supporting sales/discovery context (GROUNDING — not scope)\n` +
+        `Use this only to ground personas, assumptions, current-state, priorities, and realistic sample data. ` +
+        `The SOW in the input below is the SOURCE OF TRUTH for what is in scope — do NOT add scope from this material. ` +
+        `Anything here that the SOW does not cover is out of scope (note it as discussed-not-contracted; don't build it).\n\n` +
+        `${context.trim()}\n\n---\n\n`
+      : "";
+
     const q = query({
-      prompt: buildUserPrompt(input),
+      prompt: ctxBlock + buildUserPrompt(input),
       options: {
         ...(def.model ? { model: def.model } : {}),
         systemPrompt: def.systemPrompt,
@@ -191,7 +204,7 @@ export type FixtureMap = Record<string, (input: unknown) => unknown | Promise<un
 
 export class FixtureRunner implements SubagentRunner {
   constructor(private readonly fixtures: FixtureMap) {}
-  async run(agent: string, input: unknown): Promise<unknown> {
+  async run(agent: string, input: unknown, _context?: string): Promise<unknown> {
     const fixture = this.fixtures[agent];
     if (!fixture) throw new Error(`FixtureRunner: no fixture registered for agent '${agent}'`);
     return fixture(input);

@@ -93,7 +93,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/intake") {
       const body = JSON.parse((await readBody(req)) || "{}");
-      const out = await runIntake({ sowText: String(body.sowText ?? ""), sowRef: body.sowRef, runsRoot });
+      const out = await runIntake({ sowText: String(body.sowText ?? ""), sowRef: body.sowRef, context: body.context, runsRoot });
       return send(res, 200, JSON.stringify(out), "application/json");
     }
 
@@ -113,6 +113,7 @@ const server = createServer(async (req, res) => {
         const out = await runIntake({
           sowText: String(body.sowText ?? ""),
           sowRef: body.sowRef,
+          context: body.context,
           runsRoot,
           progress: { report: (e) => { line({ type: "progress", event: e }); } },
         });

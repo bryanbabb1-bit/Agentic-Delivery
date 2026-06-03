@@ -90,7 +90,7 @@ async function runStage<S extends z.ZodTypeAny>(
   stage.inputSchema.parse(input); // inbound seam check
 
   await deps.progress?.report({ stage: stage.name, agent: stage.agent, kind: "agent", status: "start", detail: label });
-  const raw = await deps.runner.run(stage.agent, input);
+  const raw = await deps.runner.run(stage.agent, input, deps.context);
 
   const parsed = stage.outputSchema.safeParse(raw);
   if (!parsed.success) {
@@ -222,6 +222,8 @@ const handoffGate: Gate<HandoffPackage> = (pkg) =>
 export interface RunInput {
   sowRef: string;
   sowText: string;
+  /** Optional supporting sales/discovery context (grounding, NOT scope). */
+  context?: string;
   /** When set, the driver renders the prototype HTML into this directory. */
   prototypeOut?: { dir: string };
 }
@@ -438,7 +440,7 @@ export async function runPlanPhase(
   input: RunInput,
   depsOverride: Partial<PipelineDeps> = {},
 ): Promise<PlanResult> {
-  return planPhase(input, { ...defaultDeps(), ...depsOverride });
+  return planPhase(input, { ...defaultDeps(), ...depsOverride, context: input.context ?? depsOverride.context });
 }
 
 /**
@@ -449,7 +451,7 @@ export async function run(
   input: RunInput,
   depsOverride: Partial<PipelineDeps> = {},
 ): Promise<RunResult> {
-  const deps: PipelineDeps = { ...defaultDeps(), ...depsOverride };
+  const deps: PipelineDeps = { ...defaultDeps(), ...depsOverride, context: input.context ?? depsOverride.context };
   const plan = await planPhase(input, deps);
 
   // ---- Grounded build → QA (deploy-test gate) → handoff (handoff gate) -----
