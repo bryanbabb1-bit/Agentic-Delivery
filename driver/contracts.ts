@@ -96,14 +96,33 @@ export type UserStory = z.infer<typeof UserStory>;
 
 /* ----------------------------------------------------------------- stage 3 */
 
-export const AutomationChoice = z.enum([
+const AUTOMATION_VALUES = [
   "config",
   "validation_rule",
   "flow",
   "apex",
   "omnistudio",
   "mixed",
-]);
+] as const;
+
+/**
+ * How a solution is automated. The enum is automation *style*, but agents often
+ * reach for a feature/metadata word ("rollup", "record_type", …) instead — those
+ * are delivered declaratively, so map them to `config`. Unknown values fall back
+ * to `config` (declarative-first). This keeps the contract meaningful without
+ * failing the design stage on a reasonable vocabulary slip.
+ */
+export const AutomationChoice = z.preprocess((v) => {
+  if (typeof v !== "string") return v;
+  const lc = v.toLowerCase().trim();
+  if ((AUTOMATION_VALUES as readonly string[]).includes(lc)) return lc;
+  if (lc.includes("flow")) return "flow";
+  if (lc.includes("apex")) return "apex";
+  if (lc.includes("omni")) return "omnistudio";
+  if (lc.includes("validation")) return "validation_rule";
+  if (lc.includes("mixed") || lc.includes("multiple")) return "mixed";
+  return "config"; // rollup, record_type, field, page_layout, permission_set, … → declarative
+}, z.enum(AUTOMATION_VALUES));
 
 /** Salesforce metadata component types (shared by SD and BuildResult). */
 export const MetadataType = z.enum([
