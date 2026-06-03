@@ -32,6 +32,19 @@ built screens (they are open assumptions, not v1 deliverables):
 A buildable record shown with best-guess data (e.g. an enabled Person Account, a
 standard object's record page) is fine and expected — that's the contestable
 strawman. The bar is *native buildability of the screen itself*, not certainty.
+
+**Depict standard FSC components at their NATIVE capability — don't invent
+behavior they lack.** Common traps:
+- **Action Plan Templates** are checklists of tasks with assignees and relative
+  due dates. They do NOT auto-activate successor tasks on predecessor completion,
+  enforce task-to-task gating, or run conditional logic — that's custom
+  automation. Show an Action Plan as a task checklist, not a workflow engine.
+- **Roll-Up Summaries** aggregate child values onto a parent; they don't trigger
+  actions or cascade.
+- **Flows** run on their defined triggers; don't depict real-time/event behavior
+  the design didn't specify.
+If a story needs behavior beyond a component's native capability, that's an
+**assumption**, not something to render as a built screen.
 A smaller, honest inventory of standard screens that passes the fidelity
 guardrail beats a rich one that over-promises.
 

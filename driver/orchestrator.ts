@@ -35,10 +35,7 @@ import {
   applyVerdicts,
   blockingAssumptionsRemain,
 } from "./discovery.js";
-import {
-  evaluateDeployTestGate,
-  evaluateFidelityGate,
-} from "../gates/gate-lib.js";
+import { evaluateDeployTestGate } from "../gates/gate-lib.js";
 import { defaultDeps, type PipelineDeps } from "./runner.js";
 import { renderPrototype, writePrototype, slug } from "./prototype.js";
 
@@ -160,6 +157,7 @@ const FidelityReport = z.object({
         reason: z.string(),
         severity: z.string(),
         kind: z.enum(["over_promise", "open_assumption"]).optional(),
+        mockupId: z.string().optional(), // which mockup the finding belongs to (e.g. "MOCK-05")
       }),
     )
     .default([]),
@@ -192,8 +190,8 @@ const ReconcilerDiff = z.preprocess(
 
 /* ---------------------------------------------------------------------- gates */
 
-const fidelityGate: Gate<z.infer<typeof FidelityReport>> = (report) =>
-  GateResult.parse(evaluateFidelityGate(report as Record<string, unknown>));
+// Fidelity is handled inline in the prototype sub-pipeline (over-promising screens
+// are excluded, not gated to a halt) — see planPhase. The remaining gates:
 
 const architectGate: Gate<V2> = (v2) =>
   GateResult.parse({
@@ -293,11 +291,13 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
   );
 
   // ---- Prototype sub-pipeline ---------------------------------------------
-  // layout (agent → structured inventory) → DRIVER renders HTML deterministically
-  // → fidelity (gated) → walkthrough. Rendering lives in the driver, not an LLM:
-  // models are reliable at structure and brittle at pixels, and this makes the
-  // prototype identical in demo and live runs. The mockups + assumption panel are
-  // the v0 strawman the client reacts to in discovery.
+  // layout (agent → structured inventory) → fidelity classifies each screen →
+  // the DRIVER renders ONLY the fidelity-clean screens. A screen that over-promises
+  // (depicts a capability FSC can't build natively in scope) is EXCLUDED from the
+  // client prototype and recorded as a finding — the guardrail keeps its teeth
+  // without dead-ending the whole package. Rendering lives in the driver (reliable
+  // structure, identical demo/live); the mockups + assumption panel are the v0
+  // strawman the client reacts to in discovery.
   const inventory = await runStage(
     { name: "layout", agent: "proto-layout", inputSchema: z.unknown(), outputSchema: ScreenInventory },
     { designNotes: design.epicDesigns, stories },
@@ -305,18 +305,7 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
   );
 
   const protoDir = input.prototypeOut?.dir;
-  if (protoDir) {
-    await deps.progress?.report({ stage: "prototype", agent: "(driver)", kind: "render", status: "start", detail: `${inventory.screens.length} screen(s)` });
-    const files = renderPrototype({
-      sowRef: input.sowRef,
-      screens: inventory.screens,
-      assumptions: design.assumptions,
-    });
-    await writePrototype(protoDir, files);
-    await deps.progress?.report({ stage: "prototype", agent: "(driver)", kind: "render", status: "done" });
-  }
-
-  const mockups = inventory.screens.map((screen, i) =>
+  const allMockups = inventory.screens.map((screen, i) =>
     Mockup.parse({
       id: `MOCK-${String(i + 1).padStart(2, "0")}`,
       title: screen.name,
@@ -327,26 +316,53 @@ async function planPhase(input: RunInput, deps: PipelineDeps): Promise<PlanResul
     }),
   );
 
-  await runStage(
-    {
-      name: "fidelity",
-      agent: "proto-fidelity",
-      inputSchema: z.unknown(),
-      outputSchema: FidelityReport,
-      gate: fidelityGate,
-    },
-    { mockups, designNotes: design.epicDesigns, assumptions: design.assumptions },
+  const fidelity = await runStage(
+    { name: "fidelity", agent: "proto-fidelity", inputSchema: z.unknown(), outputSchema: FidelityReport },
+    { mockups: allMockups, designNotes: design.epicDesigns, assumptions: design.assumptions },
     deps,
+  );
+
+  // Over-promises (anything not an open_assumption) exclude their screen. Match a
+  // violation to a mockup by explicit id or by the mockup id appearing in the text.
+  const overPromises = fidelity.violations.filter((v) => v.kind !== "open_assumption");
+  const excludedIds = new Set(
+    allMockups
+      .filter((m) => overPromises.some((v) => v.mockupId === m.id || (v.element ?? "").includes(m.id)))
+      .map((m) => m.id),
+  );
+  const keptScreens = inventory.screens.filter((_, i) => !excludedIds.has(allMockups[i]!.id));
+  const fidelityPassedMockups = allMockups
+    .filter((m) => !excludedIds.has(m.id))
+    .map((m) => ({ ...m, fidelityPassed: true }));
+
+  // Render only the fidelity-clean screens.
+  if (protoDir) {
+    await deps.progress?.report({ stage: "prototype", agent: "(driver)", kind: "render", status: "start", detail: `${keptScreens.length} screen(s)` });
+    const files = renderPrototype({ sowRef: input.sowRef, screens: keptScreens, assumptions: design.assumptions });
+    await writePrototype(protoDir, files);
+    await deps.progress?.report({ stage: "prototype", agent: "(driver)", kind: "render", status: "done" });
+  }
+
+  // Fidelity confirm: record the over-promise findings (which screens were excluded
+  // and why); a human reviews them, or an unattended run auto-approves.
+  await deps.progress?.report({
+    stage: "fidelity", agent: "(review)", kind: "gate", status: "done",
+    detail: excludedIds.size ? `${excludedIds.size} screen(s) excluded as over-promises` : "all screens clean",
+  });
+  await deps.humanGate.approve(
+    GateResult.parse({
+      gate: "fidelity",
+      passed: true,
+      failures: overPromises.map((v) => `excluded ${v.mockupId ?? "screen"}: ${v.element}`),
+      requiresHuman: true,
+    }),
   );
 
   await runStage(
     { name: "walkthrough", agent: "proto-walkthrough", inputSchema: z.unknown(), outputSchema: Walkthrough },
-    { mockups, assumptions: design.assumptions },
+    { mockups: fidelityPassedMockups, assumptions: design.assumptions },
     deps,
   );
-
-  // Fidelity passed → stamp the mockups.
-  const fidelityPassedMockups = mockups.map((m) => ({ ...m, fidelityPassed: true }));
 
   let deliverable: DeliverablePackage = DeliverablePackage.parse({
     sowRef: input.sowRef,

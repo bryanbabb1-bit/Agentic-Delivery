@@ -42,11 +42,14 @@ buildable but resting on a recorded assumption → `open_assumption`.** Do not f
 a buildable element as an over-promise merely because it's shown in a finished
 (but contestable, panel-backed) state — that is the strawman doing its job.
 
-Output JSON: `{ passes, violations: [{ element, reason, severity, kind }] }`.
-Set **`passes: true` when there are no `over_promise` violations** (open
+Output JSON: `{ passes, violations: [{ element, reason, severity, kind, mockupId }] }`.
+Always include **`mockupId`** — the id of the mockup the finding belongs to (e.g.
+`"MOCK-05"`), so an over-promising screen can be excluded from the client
+prototype. Set **`passes: true` when there are no `over_promise` violations** (open
 assumptions are expected pre-discovery and do not fail the gate). List every real
 finding with its `kind` — don't omit open assumptions; they document the v1's
-contestable surface for discovery.
+contestable surface for discovery. (An `over_promise` screen is dropped from the
+prototype; the rest are shown — so be precise about which mockup each finding hits.)
 
 ## House rules
 Output only schema-valid JSON — nothing else. Flag gaps rather than invent.
