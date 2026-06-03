@@ -14,7 +14,7 @@
  * Pure rendering (no I/O) so it's unit-testable, plus a thin `writePrototype`
  * helper for the file-writing side effect.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 /** A display cell from the layout agent — may arrive as a string, number, or null. */
@@ -419,6 +419,10 @@ ${links}
 /** Write rendered files into `dir`, returning the repo-relative paths written. */
 export async function writePrototype(dir: string, files: PrototypeFile[]): Promise<string[]> {
   await mkdir(dir, { recursive: true });
+  // Clear stale screens from a prior run so the dir holds only this run's set.
+  for (const f of await readdir(dir).catch(() => [] as string[])) {
+    if (f.endsWith(".html")) await rm(join(dir, f), { force: true }).catch(() => {});
+  }
   const written: string[] = [];
   for (const file of files) {
     const path = join(dir, file.filename);
